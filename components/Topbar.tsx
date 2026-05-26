@@ -27,10 +27,7 @@ export default function Topbar({ userName, userRole, userEmail }: TopbarProps) {
 
   return (
     <div className="topbar">
-      <div className="topbar-brand">
-        <span className="brand-dot" />
-        CRM
-      </div>
+      <div className="topbar-brand"><span className="brand-dot" />CRM</div>
       <Link href="/dashboard" className={`nav-btn${pathname === '/dashboard' ? ' active' : ''}`}>🏠 ראשי</Link>
       <Link href="/new-case" className={`nav-btn${pathname === '/new-case' ? ' active' : ''}`}>＋ פניה חדשה</Link>
       {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
