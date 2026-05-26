@@ -91,6 +91,13 @@ export default function NewCasePage() {
     setSaving(true)
     const { error } = await supabase.from('cases').insert({
       ...form,
+      org_id: form.org_id || null,
+      status_id: form.status_id || null,
+      cat1_id: form.cat1_id || null,
+      cat2_id: form.cat2_id || null,
+      cat3_id: form.cat3_id || null,
+      supplier_id: form.supplier_id || null,
+      benefit_id: form.benefit_id || null,
       agent_id: profile.id,
       agent_name: profile.full_name,
     })
@@ -104,7 +111,7 @@ export default function NewCasePage() {
 
   return (
     <>
-      <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} />
+      <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} userEmail={profile?.email || ''} />
       <div style={{ padding: '22px 26px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
           <a href="/dashboard" className="btn btn-sm">← חזרה</a>
