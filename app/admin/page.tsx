@@ -89,19 +89,13 @@ export default function AdminPage() {
   async function createUser() {
     if (!newUser.email || !newUser.password || !newUser.full_name) { alert('כל השדות חובה'); return }
     setAddingUser(true)
-    const { data, error } = await supabase.auth.admin.createUser({
-      email: newUser.email, password: newUser.password,
-      user_metadata: { full_name: newUser.full_name, role: newUser.role },
-      email_confirm: true
+    const res = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newUser)
     })
-    if (error) {
-      // fallback: use signUp
-      const { error: e2 } = await supabase.auth.signUp({
-        email: newUser.email, password: newUser.password,
-        options: { data: { full_name: newUser.full_name, role: newUser.role } }
-      })
-      if (e2) { alert('שגיאה: ' + e2.message); setAddingUser(false); return }
-    }
+    const data = await res.json()
+    if (data.error) { alert('שגיאה: ' + data.error); setAddingUser(false); return }
     setAddingUser(false)
     setNewUser({ email: '', password: '', full_name: '', role: 'agent' })
     showToast('משתמש נוסף ✓')
