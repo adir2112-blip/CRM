@@ -42,9 +42,9 @@ export default function ReportsPage() {
     const { data } = await q.order('created_at', { ascending: false })
     const d = data || []
     setCases(d)
-    setCat1s([...new Set(d.map((c: any) => c.cat1_name).filter(Boolean))])
-    setCat2s([...new Set(d.map((c: any) => c.cat2_name).filter(Boolean))])
-    setCat3s([...new Set(d.map((c: any) => c.cat3_name).filter(Boolean))])
+setCat1s(Array.from(new Set(d.map((c: any) => c.cat1_name).filter(Boolean))))
+setCat2s(Array.from(new Set(d.map((c: any) => c.cat2_name).filter(Boolean))))
+setCat3s(Array.from(new Set(d.map((c: any) => c.cat3_name).filter(Boolean))))
   }
 
   function exportExcel() {
