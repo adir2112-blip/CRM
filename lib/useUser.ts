@@ -15,21 +15,22 @@ export function useUser() {
       const { data: { user }, error } = await supabase.auth.getUser()
       if (error || !user) { router.push('/login'); return }
       setUser(user)
-      const { data: prof, error: profError } = await supabase
+      const { data: prof } = await supabase
         .from('profiles')
         .select('id, full_name, role, active')
         .eq('id', user.id)
         .single()
-      console.log('Profile loaded:', prof, profError)
+      console.log('Profile loaded:', prof)
       if (prof) {
-        setProfile(prof)
+        // attach email from auth user
+        setProfile({ ...prof, email: user.email })
       } else {
         const { data: newProf } = await supabase
           .from('profiles')
           .insert({ id: user.id, full_name: user.email, role: 'agent' })
           .select()
           .single()
-        setProfile(newProf)
+        setProfile({ ...newProf, email: user.email })
       }
       setLoading(false)
     }

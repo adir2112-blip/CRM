@@ -47,6 +47,8 @@ export default function AdminPage() {
     loadUsers(); loadStatuses(); loadOrgs(); loadSuppliers(); loadBenefits()
   }, [profile])
 
+  const [userFilter, setUserFilter] = useState('active')
+
   async function loadUsers() {
     const { data } = await supabase.from('profiles').select('*').order('full_name')
     setUsers(data || [])
@@ -103,9 +105,16 @@ export default function AdminPage() {
   }
 
   async function deleteUser(id: string) {
-    if (!confirm('למחוק משתמש?')) return
+    if (!confirm('להשבית משתמש?')) return
     await supabase.from('profiles').update({ active: false }).eq('id', id)
     loadUsers()
+  }
+
+  async function hardDeleteUser(id: string) {
+    if (!confirm('למחוק משתמש לחלוטין? הפניות שלו יישארו במערכת')) return
+    await supabase.from('profiles').delete().eq('id', id)
+    loadUsers()
+    showToast('משתמש נמחק ✓')
   }
 
   async function addStatus() {
@@ -189,7 +198,7 @@ export default function AdminPage() {
 
   return (
     <>
-      <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} />
+      <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} userEmail={profile?.email || ''} />
       <div style={{ padding: '22px 26px' }}>
         <div className="page-header"><div className="page-title">ניהול מערכת</div></div>
         <div className="tabs">
@@ -216,15 +225,25 @@ export default function AdminPage() {
               </div>
               <button className="btn btn-primary" onClick={createUser} disabled={addingUser}>{addingUser ? 'מוסיף...' : '+ הוסף משתמש'}</button>
             </div>
+            {/* Filter tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              {[['active','פעילים'],['inactive','לא פעילים'],['all','כולם']].map(([k,v]) => (
+                <button key={k} className={`btn btn-sm${userFilter===k?' btn-primary':''}`} onClick={() => setUserFilter(k)}>{v}</button>
+              ))}
+            </div>
             <div className="card" style={{ padding: 0 }}>
-              <table><thead><tr><th>שם</th><th>מייל</th><th>תפקיד</th><th>סטטוס</th><th></th></tr></thead>
-                <tbody>{users.map(u => (
+              <table><thead><tr><th>שם</th><th>תפקיד</th><th>סטטוס</th><th></th></tr></thead>
+                <tbody>{users
+                  .filter(u => userFilter === 'all' ? true : userFilter === 'active' ? u.active : !u.active)
+                  .map(u => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 500 }}>{u.full_name}</td>
-                    <td style={{ color: 'var(--text2)' }}>{u.id}</td>
                     <td><span className={`badge ${u.role === 'admin' ? 'b-purple' : 'b-blue'}`}>{u.role === 'admin' ? 'מנהל' : 'נציג'}</span></td>
                     <td><span className={`badge ${u.active ? 'b-green' : 'b-gray'}`}>{u.active ? 'פעיל' : 'לא פעיל'}</span></td>
-                    <td>{u.id !== profile.id && <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}>השבת</button>}</td>
+                    <td style={{ display: 'flex', gap: 6 }}>
+                      {u.id !== profile.id && u.active && <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}>השבת</button>}
+                      {u.id !== profile.id && <button className="btn btn-xs" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }} onClick={() => hardDeleteUser(u.id)}>מחק לחלוטין</button>}
+                    </td>
                   </tr>
                 ))}</tbody>
               </table>

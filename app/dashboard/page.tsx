@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import Topbar from '@/components/Topbar'
 import { fmt, statusBadgeClass, isOverdue, isMgrWaitOverdue, isMgrActiveOverdue, businessDaysBetween } from '@/lib/utils'
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 const RANGE_LABELS: Record<string, string> = { all:'הכל', day:'יום', week:'שבוע', month:'חודש', '3m':'3 חודשים', '6m':'חצי שנה', year:'שנה' }
 
@@ -54,7 +55,12 @@ export default function DashboardPage() {
   const [modalList, setModalList] = useState<any[]>([])
   const [showListModal, setShowListModal] = useState(false)
 
-  const supabase = createClient()
+  const [chartOrgFilter, setChartOrgFilter] = useState('')
+  const [orgs, setOrgs] = useState<any[]>([])
+
+  useEffect(() => {
+    supabase.from('organizations').select('*').order('name').then(({ data }) => setOrgs(data || []))
+  }, [])
 
   const loadCases = useCallback(async () => {
     if (!profile) return
@@ -126,7 +132,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} />
+      <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} userEmail={profile?.email || ''} />
       <div style={{ padding: '22px 26px', maxWidth: 1600, margin: '0 auto' }}>
 
         {/* Header */}
@@ -266,6 +272,69 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* CHARTS — admin only */}
+        {isAdmin && (() => {
+          const filteredForChart = chartOrgFilter ? cases.filter(c => c.org_name === chartOrgFilter) : cases
+          const counts: Record<string, number> = {}
+          filteredForChart.forEach(c => {
+            if (!c.cat1_name || !c.cat2_name) return
+            const key = c.cat1_name + ' › ' + c.cat2_name
+            counts[key] = (counts[key] || 0) + 1
+          })
+          const chartData = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, value]) => ({ name, value }))
+          const COLORS = ['#2563eb','#7c3aed','#0d9488','#d97706','#dc2626','#16a34a','#9333ea','#0891b2']
+          const tableCounts: Record<string, any> = {}
+          filteredForChart.forEach(c => {
+            if (!c.cat1_name || !c.cat2_name) return
+            const key = (c.org_name||'') + '||' + c.cat1_name + '||' + c.cat2_name
+            if (!tableCounts[key]) tableCounts[key] = { org: c.org_name, cat1: c.cat1_name, cat2: c.cat2_name, count: 0 }
+            tableCounts[key].count++
+          })
+          const tableRows = Object.values(tableCounts).sort((a: any, b: any) => b.count - a.count).slice(0, 20)
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+              <div className="card card-pad">
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>📊 פניות חוזרות לפי סיווג שני</div>
+                  <select className="form-input" value={chartOrgFilter} onChange={e => setChartOrgFilter(e.target.value)} style={{ width: 160, fontSize: 12, padding: '5px 8px' }}>
+                    <option value="">כל הארגונים</option>
+                    {orgs.map((o: any) => <option key={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value">
+                        {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip formatter={(v: any, n: any) => [v + ' פניות', n]} />
+                      <Legend iconSize={10} wrapperStyle={{ fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>אין נתונים</div>}
+              </div>
+              <div className="card card-pad">
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>📈 פניות חוזרות — טבלה מפורטת</div>
+                <div style={{ overflowY: 'auto', maxHeight: 280 }}>
+                  <table style={{ fontSize: 12 }}>
+                    <thead><tr><th>ארגון</th><th>סיווג ראשון</th><th>סיווג שני</th><th style={{ textAlign: 'center' }}>כמות</th></tr></thead>
+                    <tbody>
+                      {tableRows.length ? tableRows.map((r: any, i: number) => (
+                        <tr key={i}>
+                          <td><span className="badge b-gray" style={{ fontSize: 10 }}>{(r.org||'').split(' ')[0]}</span></td>
+                          <td style={{ color: 'var(--text2)' }}>{r.cat1}</td>
+                          <td style={{ fontWeight: 500 }}>{r.cat2}</td>
+                          <td style={{ textAlign: 'center' }}><span className={`badge ${i < 3 ? 'b-red' : 'b-gray'}`} style={{ fontSize: 11 }}>{r.count}</span></td>
+                        </tr>
+                      )) : <tr><td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text3)' }}>אין נתונים</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Case detail modal */}
