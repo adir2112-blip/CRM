@@ -54,19 +54,20 @@ export default function DashboardPage() {
   const [modalTitle, setModalTitle] = useState('')
   const [modalList, setModalList] = useState<any[]>([])
   const [showListModal, setShowListModal] = useState(false)
-
-  const supabase = createClient()
   const [chartOrgFilter, setChartOrgFilter] = useState('')
   const [orgs, setOrgs] = useState<any[]>([])
+  const [toast, setToast] = useState('')
 
-  useEffect(() => {
-    supabase.from('organizations').select('*').order('name').then(({ data }) => setOrgs(data || []))
-  }, [])
+  const supabase = createClient()
 
   const loadCases = useCallback(async () => {
     if (!profile) return
-    const { data } = await supabase.from('cases').select('*').order('updated_at', { ascending: false })
-    setCases(data || [])
+    const [casesRes, orgsRes] = await Promise.all([
+      supabase.from('cases').select('*').order('updated_at', { ascending: false }),
+      supabase.from('organizations').select('*').order('name')
+    ])
+    setCases(casesRes.data || [])
+    setOrgs(orgsRes.data || [])
   }, [profile])
 
   useEffect(() => { loadCases() }, [loadCases])
@@ -112,7 +113,6 @@ export default function DashboardPage() {
 
   function showList(title: string, list: any[]) { setModalTitle(title); setModalList(list); setShowListModal(true) }
 
-  const [toast, setToast] = useState('')
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text3)' }}>טוען...</div>
