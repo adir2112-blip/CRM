@@ -55,6 +55,7 @@ export default function DashboardPage() {
   const [modalList, setModalList] = useState<any[]>([])
   const [showListModal, setShowListModal] = useState(false)
 
+  const supabase = createClient()
   const [chartOrgFilter, setChartOrgFilter] = useState('')
   const [orgs, setOrgs] = useState<any[]>([])
 
