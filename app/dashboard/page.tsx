@@ -157,7 +157,7 @@ export default function DashboardPage() {
   const mgrActive = cases.filter(c => isMgrActiveOverdue(c))
   const doneMine = myCases.filter(c => c.status_name?.includes('טופל')).length
   const isAdmin = profile?.role === 'admin'
-  const isSuperAdmin = profile?.email === 'adir2112@gmail.com' || user?.email === 'adir2112@gmail.com'
+  const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
   const h = new Date().getHours()
   const greeting = (h < 12 ? 'בוקר טוב' : 'אחר הצהריים טובים') + ', ' + profile?.full_name + ' 👋'
   const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
