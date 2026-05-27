@@ -200,8 +200,16 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
                     <span style={{ fontSize: 11, color: '#b91c1c', fontWeight: 600 }}>{fmt(r.remind_at)}</span>
                   </div>
                   <div style={{ fontSize: 13, color: '#4b5568', marginBottom: 8 }}>{r.note}</div>
-                  <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
-                    onClick={() => markReminderDone(r.id)}>✓ טופל</button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {r.case_id && (
+                      <button style={{ padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, cursor: 'pointer', background: '#eff4ff', color: '#2563eb', border: '1px solid #bfdbfe', fontFamily: 'Heebo, sans-serif' }}
+                        onClick={() => { setShowReminderPopup(false); router.push('/dashboard?openCase=' + r.case_id) }}>
+                        פתח כרטיס לקוח
+                      </button>
+                    )}
+                    <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
+                      onClick={() => markReminderDone(r.id)}>✓ טופל</button>
+                  </div>
                 </div>
               ))}
             </div>

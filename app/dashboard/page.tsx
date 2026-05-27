@@ -76,11 +76,45 @@ export default function DashboardPage() {
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
   }, [])
 
+  const [showAddReminder, setShowAddReminder] = useState(false)
+  const [newReminder, setNewReminder] = useState({ remind_at: '', note: '' })
+
+  const isAdmin = profile?.role === 'admin'
+  const isSuperAdmin = profile?.email === 'adir2112@gmail.com' || user?.email === 'adir2112@gmail.com'
+
   async function openCase(c: any) {
     setSelectedCase(c)
     setEditStatus(c.status_name)
     const { data } = await supabase.from('case_logs').select('*').eq('case_id', c.id).order('created_at')
     setLogs(data || [])
+    setShowAddReminder(false)
+    setNewReminder({ remind_at: '', note: '' })
+  }
+
+  async function deleteCase(id: number) {
+    if (!confirm('למחוק פניה לצמיתות?')) return
+    await supabase.from('reminders').delete().eq('case_id', id)
+    await supabase.from('case_logs').delete().eq('case_id', id)
+    await supabase.from('cases').delete().eq('id', id)
+    setSelectedCase(null)
+    loadCases()
+    showToast('פניה נמחקה ✓')
+  }
+
+  async function saveReminder() {
+    if (!newReminder.remind_at || !newReminder.note) { alert('חובה: תאריך+שעה והערה'); return }
+    await supabase.from('reminders').insert({
+      case_id: selectedCase.id,
+      agent_id: profile.id,
+      agent_name: profile.full_name,
+      customer_name: selectedCase.customer_name,
+      org_name: selectedCase.org_name,
+      remind_at: newReminder.remind_at,
+      note: newReminder.note,
+    })
+    setShowAddReminder(false)
+    setNewReminder({ remind_at: '', note: '' })
+    showToast('תזכורת נוספה ✓')
   }
 
   async function saveStatus() {
@@ -343,7 +377,12 @@ export default function DashboardPage() {
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setSelectedCase(null) }}>
           <div className="modal">
             <div className="modal-header">
-              <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
+                {isSuperAdmin && (
+                  <button className="btn btn-xs btn-danger" onClick={() => deleteCase(selectedCase.id)}>🗑 מחק פניה</button>
+                )}
+              </div>
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -361,16 +400,59 @@ export default function DashboardPage() {
               </div>
             )}
             <div className="divider" />
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>סטטוס</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <select className="form-input" value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ flex: 1 }}>
-                {statuses.map(s => <option key={s.id}>{s.name}</option>)}
-              </select>
-              <button className="btn btn-primary btn-sm" onClick={saveStatus}>עדכן</button>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>סטטוס</div>
+            {/* Styled status buttons */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+              {statuses.map(s => {
+                const colorMap: Record<string, { bg: string, color: string, border: string }> = {
+                  'טופל':                    { bg: '#dcfce7', color: '#15803d', border: '#16a34a' },
+                  'טופל לאחר שיחת מנהל':   { bg: '#ccfbf1', color: '#0f766e', border: '#0d9488' },
+                  'בטיפול נציג':             { bg: '#dbeafe', color: '#1d4ed8', border: '#2563eb' },
+                  'בטיפול בשיחת מנהל':      { bg: '#ede9fe', color: '#6d28d9', border: '#7c3aed' },
+                  'הועבר לשיחת מנהל':       { bg: '#f3e8ff', color: '#9333ea', border: '#a855f7' },
+                  'אין מענה':                { bg: '#fef3c7', color: '#b45309', border: '#d97706' },
+                }
+                const style = colorMap[s.name] || { bg: '#f3f4f6', color: '#374151', border: '#9ca3af' }
+                const isSelected = editStatus === s.name
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => {
+                      setEditStatus(s.name)
+                      if (s.name === 'בטיפול נציג') setShowAddReminder(true)
+                      else setShowAddReminder(false)
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontFamily: 'Heebo, sans-serif',
+                      transition: 'all 0.15s',
+                      background: isSelected ? style.color : style.bg,
+                      color: isSelected ? '#fff' : style.color,
+                      border: `2px solid ${style.border}`,
+                      boxShadow: isSelected ? `0 3px 10px ${style.color}50` : '0 1px 3px rgba(0,0,0,0.08)',
+                      transform: isSelected ? 'scale(1.06)' : 'scale(1)',
+                      outline: 'none',
+                    }}
+                  >
+                    {s.name === 'טופל' && '✅ '}
+                    {s.name === 'טופל לאחר שיחת מנהל' && '✅ '}
+                    {s.name === 'בטיפול נציג' && '⏳ '}
+                    {s.name === 'בטיפול בשיחת מנהל' && '🟣 '}
+                    {s.name === 'הועבר לשיחת מנהל' && '🟣 '}
+                    {s.name === 'אין מענה' && '📵 '}
+                    {s.name}
+                  </button>
+                )
+              })}
             </div>
+            <button className="btn btn-primary btn-sm" onClick={saveStatus} style={{ marginBottom: 14 }}>עדכן סטטוס</button>
             <div className="divider" />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>📝 תיעוד ידני</div>
-            <div style={{ marginBottom: 12, maxHeight: 180, overflowY: 'auto' }}>
+            <div style={{ marginBottom: 12, maxHeight: 160, overflowY: 'auto' }}>
               {logs.length ? logs.map(l => (
                 <div key={l.id} className="log-entry">
                   <div className="log-meta">{fmt(l.created_at)} — {l.author_name}</div>
@@ -382,6 +464,29 @@ export default function DashboardPage() {
               <textarea className="form-input" rows={2} value={newLog} onChange={e => setNewLog(e.target.value)} placeholder="הוסף הערה לתיעוד..." style={{ flex: 1 }} />
               <button className="btn btn-success btn-sm" style={{ alignSelf: 'flex-start' }} onClick={addLog}>+ הוסף</button>
             </div>
+            <div className="divider" />
+            {/* Reminder section */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>🔔 תזכורת חזרה ללקוח</div>
+              <button className="btn btn-xs" style={{ background: '#eff4ff', color: '#2563eb', border: '1px solid #bfdbfe' }} onClick={() => setShowAddReminder(!showAddReminder)}>
+                {showAddReminder ? 'ביטול' : '+ הוסף תזכורת'}
+              </button>
+            </div>
+            {showAddReminder && (
+              <div style={{ background: '#eff4ff', borderRadius: 8, padding: '12px 14px', marginBottom: 10 }}>
+                <div className="form-row" style={{ marginBottom: 10 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">תאריך ושעה *</label>
+                    <input className="form-input" type="datetime-local" value={newReminder.remind_at} onChange={e => setNewReminder(p => ({ ...p, remind_at: e.target.value }))} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">הערה *</label>
+                    <input className="form-input" value={newReminder.note} onChange={e => setNewReminder(p => ({ ...p, note: e.target.value }))} placeholder="לדוגמא: לחזור ולוודא קבלת חבילה" />
+                  </div>
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={saveReminder}>שמור תזכורת</button>
+              </div>
+            )}
           </div>
         </div>
       )}
