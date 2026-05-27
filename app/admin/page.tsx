@@ -149,6 +149,7 @@ export default function AdminPage() {
     setCat2List([])
     setCat3Map({})
   }
+  async function addCat1() {
     if (!selOrg || !newCat1Name.trim()) return
     await supabase.from('cat1').insert({ org_id: selOrg, name: newCat1Name, sort_order: cat1List.length + 1 })
     setNewCat1Name(''); loadCat1(selOrg); showToast('סיווג נוסף ✓')
