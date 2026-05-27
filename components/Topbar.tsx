@@ -22,10 +22,35 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
   const [searchQ, setSearchQ] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [showResults, setShowResults] = useState(false)
+  const [overdueReminders, setOverdueReminders] = useState<any[]>([])
+  const [showReminderPopup, setShowReminderPopup] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
   const supabase = createClient()
-
   const initials = userName.split(' ').map(p => p[0]).join('').slice(0, 2)
+
+  // Check overdue reminders on mount
+  useEffect(() => {
+    async function checkReminders() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const lastLogin = localStorage.getItem('lastLogin_' + user.id) || new Date(0).toISOString()
+      const now = new Date().toISOString()
+      const { data } = await supabase
+        .from('reminders')
+        .select('*')
+        .eq('agent_id', user.id)
+        .eq('is_done', false)
+        .lte('remind_at', now)
+        .gte('remind_at', lastLogin)
+        .order('remind_at')
+      if (data && data.length > 0) {
+        setOverdueReminders(data)
+        setShowReminderPopup(true)
+      }
+      localStorage.setItem('lastLogin_' + user.id, now)
+    }
+    if (userName) checkReminders()
+  }, [userName])
 
   async function doSearch(q: string) {
     setSearchQ(q)
@@ -40,7 +65,6 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     setShowResults(true)
   }
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
@@ -52,7 +76,6 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
   }, [])
 
   async function handleLogout() {
-    const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
   }
@@ -60,78 +83,133 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
   function handleSelectCase(c: any) {
     setShowResults(false)
     setSearchQ('')
-    if (onOpenCase) {
-      onOpenCase(c)
-    } else {
-      // navigate to dashboard with case id
-      router.push('/dashboard?case=' + c.id)
-    }
+    if (onOpenCase) onOpenCase(c)
+    else router.push('/dashboard?openCase=' + c.id)
+  }
+
+  async function markReminderDone(id: string) {
+    await supabase.from('reminders').update({ is_done: true }).eq('id', id)
+    setOverdueReminders(prev => prev.filter(r => r.id !== id))
   }
 
   return (
-    <div className="topbar">
-      <div className="topbar-brand"><span className="brand-dot" />CRM</div>
-      <Link href="/dashboard" className={`nav-btn${pathname === '/dashboard' ? ' active' : ''}`}>🏠 ראשי</Link>
-      <Link href="/new-case" className={`nav-btn${pathname === '/new-case' ? ' active' : ''}`}>＋ פניה חדשה</Link>
-      {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
-      {isAdmin && <Link href="/agents-status" className={`nav-btn${pathname === '/agents-status' ? ' active' : ''}`}>👥 בטיפול נציגים</Link>}
-      {isAdmin && <Link href="/reports" className={`nav-btn${pathname === '/reports' ? ' active' : ''}`}>📊 דוחות</Link>}
-      {isSuperAdmin && <Link href="/admin" className={`nav-btn${pathname.startsWith('/admin') ? ' active' : ''}`}>⚙ ניהול</Link>}
+    <>
+      <div className="topbar">
+        <div className="topbar-brand"><span className="brand-dot" />CRM</div>
+        <Link href="/dashboard" className={`nav-btn${pathname === '/dashboard' ? ' active' : ''}`}>🏠 ראשי</Link>
+        <Link href="/new-case" className={`nav-btn${pathname === '/new-case' ? ' active' : ''}`}>＋ פניה חדשה</Link>
+        {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
+        {isAdmin && <Link href="/agents-status" className={`nav-btn${pathname === '/agents-status' ? ' active' : ''}`}>👥 בטיפול נציגים</Link>}
+        {isAdmin && <Link href="/reports" className={`nav-btn${pathname === '/reports' ? ' active' : ''}`}>📊 דוחות</Link>}
+        <Link href="/calendar" className={`nav-btn${pathname === '/calendar' ? ' active' : ''}`}>📅 יומן</Link>
+        {isSuperAdmin && <Link href="/admin" className={`nav-btn${pathname.startsWith('/admin') ? ' active' : ''}`}>⚙ ניהול</Link>}
 
-      <div className="topbar-right">
-        {/* Global search */}
-        <div ref={searchRef} style={{ position: 'relative' }}>
-          <input
-            value={searchQ}
-            onChange={e => doSearch(e.target.value)}
-            onFocus={() => results.length > 0 && setShowResults(true)}
-            placeholder="🔍 חיפוש לקוח..."
-            style={{
-              width: 200, padding: '5px 10px', borderRadius: 20,
-              border: '1px solid rgba(255,255,255,0.25)',
-              background: 'rgba(255,255,255,0.15)', color: '#fff',
-              fontSize: 12, fontFamily: 'Heebo, sans-serif', outline: 'none'
-            }}
-          />
-          {showResults && results.length > 0 && (
-            <div style={{
-              position: 'absolute', top: '110%', left: 0, right: 0,
-              background: '#fff', border: '1px solid #dde1eb',
-              borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              zIndex: 999, overflow: 'hidden', minWidth: 340
+        <div className="topbar-right">
+          {/* Search */}
+          <div ref={searchRef} style={{ position: 'relative' }}>
+            <input
+              value={searchQ}
+              onChange={e => doSearch(e.target.value)}
+              onFocus={() => results.length > 0 && setShowResults(true)}
+              placeholder="🔍 חיפוש לקוח..."
+              style={{
+                width: 210, padding: '5px 12px', borderRadius: 20,
+                border: '1px solid rgba(255,255,255,0.3)',
+                background: 'rgba(255,255,255,0.15)', color: '#fff',
+                fontSize: 12, fontFamily: 'Heebo, sans-serif', outline: 'none',
+              }}
+              onMouseEnter={e => { (e.target as any).style.background = 'rgba(255,255,255,0.22)' }}
+              onMouseLeave={e => { if (document.activeElement !== e.target) (e.target as any).style.background = 'rgba(255,255,255,0.15)' }}
+            />
+            <style>{`input::placeholder { color: rgba(255,255,255,0.7) !important; }`}</style>
+            {showResults && results.length > 0 && (
+              <div style={{
+                position: 'absolute', top: '110%', left: 0,
+                background: '#fff', border: '1px solid #dde1eb',
+                borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                zIndex: 999, overflow: 'hidden', minWidth: 360
+              }}>
+                {results.map(c => (
+                  <div key={c.id} onClick={() => handleSelectCase(c)} style={{
+                    padding: '10px 14px', cursor: 'pointer',
+                    borderBottom: '1px solid #f1f3f8',
+                  }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#eff4ff')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{c.customer_name}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{fmt(c.updated_at)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 3, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, color: '#6b7280', direction: 'ltr' }}>{c.phone}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{(c.org_name || '').split(' ')[0]}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af' }}>נציג: {c.agent_name}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Reminder bell */}
+          {overdueReminders.length > 0 && (
+            <button onClick={() => setShowReminderPopup(true)} style={{
+              background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 999,
+              padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              fontSize: 12, fontWeight: 700, color: '#b91c1c', fontFamily: 'Heebo, sans-serif'
             }}>
-              {results.map(c => (
-                <div key={c.id} onClick={() => handleSelectCase(c)} style={{
-                  padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid #f1f3f8',
-                  display: 'flex', flexDirection: 'column', gap: 3
-                }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#eff4ff')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{c.customer_name}</span>
-                    <span style={{ fontSize: 10, color: '#9ca3af' }}>עדכון: {fmt(c.updated_at)}</span>
+              🔔 {overdueReminders.length}
+            </button>
+          )}
+
+          <div className="user-pill">
+            <div className="avatar">{initials}</div>
+            <div>
+              <div className="user-name">{userName}</div>
+              <div className="user-role">{isAdmin ? 'מנהל' : 'נציג'}</div>
+            </div>
+          </div>
+          <button className="btn btn-white btn-sm" onClick={handleLogout}>יציאה</button>
+        </div>
+      </div>
+
+      {/* Reminder popup */}
+      {showReminderPopup && overdueReminders.length > 0 && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)',
+          zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}>
+          <div style={{
+            background: '#fff', borderRadius: 16, padding: 28, width: 460, maxWidth: '95vw',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.2)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+              <span style={{ fontSize: 24 }}>🔔</span>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>תזכורות שממתינות לך</div>
+              <span style={{ marginRight: 'auto', fontSize: 12, color: '#9ca3af' }}>{overdueReminders.length} תזכורות</span>
+            </div>
+            <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+              {overdueReminders.map(r => (
+                <div key={r.id} style={{
+                  background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8,
+                  padding: '12px 14px', marginBottom: 10
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{r.customer_name || 'תזכורת כללית'}</span>
+                    <span style={{ fontSize: 11, color: '#b91c1c', fontWeight: 600 }}>{fmt(r.remind_at)}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 11, color: '#6b7280', direction: 'ltr' }}>{c.phone}</span>
-                    <span style={{ fontSize: 10, color: '#9ca3af' }}>{(c.org_name || '').split(' ')[0]}</span>
-                    <span style={{ fontSize: 10, color: '#9ca3af' }}>נציג: {c.agent_name}</span>
-                  </div>
+                  <div style={{ fontSize: 13, color: '#4b5568', marginBottom: 8 }}>{r.note}</div>
+                  <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}
+                    onClick={() => markReminderDone(r.id)}>✓ טופל</button>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        <div className="user-pill">
-          <div className="avatar">{initials}</div>
-          <div>
-            <div className="user-name">{userName}</div>
-            <div className="user-role">{isAdmin ? 'מנהל' : 'נציג'}</div>
+            <button className="btn" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
+              onClick={() => setShowReminderPopup(false)}>סגור</button>
           </div>
         </div>
-        <button className="btn btn-white btn-sm" onClick={handleLogout}>יציאה</button>
-      </div>
-    </div>
+      )}
+    </>
   )
 }
