@@ -52,6 +52,23 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     if (userName) checkReminders()
   }, [userName])
 
+  function relativeTime(dateStr: string): string {
+    const now = new Date()
+    const d = new Date(dateStr)
+    const diffMs = now.getTime() - d.getTime()
+    const diffDays = Math.floor(diffMs / 864e5)
+    if (diffDays === 0) return 'היום'
+    if (diffDays === 1) return 'אתמול'
+    if (diffDays === 2) return 'שלשום'
+    if (diffDays < 7) return `לפני ${diffDays} ימים`
+    if (diffDays < 14) return 'לפני שבוע'
+    if (diffDays < 21) return 'לפני שבועיים'
+    if (diffDays < 30) return 'לפני 3 שבועות'
+    if (diffDays < 60) return 'לפני חודש'
+    if (diffDays < 90) return 'לפני חודשיים'
+    return `לפני ${Math.floor(diffDays / 30)} חודשים`
+  }
+
   async function doSearch(q: string) {
     setSearchQ(q)
     if (!q.trim()) { setResults([]); setShowResults(false); return }
@@ -137,14 +154,18 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
                     onMouseEnter={e => (e.currentTarget.style.background = '#eff4ff')}
                     onMouseLeave={e => (e.currentTarget.style.background = '#fff')}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontWeight: 600, fontSize: 13, color: '#111827' }}>{c.customer_name}</span>
-                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{fmt(c.updated_at)}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: '#111827' }}>{c.customer_name}</span>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#2563eb' }}>{relativeTime(c.updated_at)}</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af' }}>{fmt(c.updated_at)}</div>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 3, alignItems: 'center' }}>
-                      <span style={{ fontSize: 11, color: '#6b7280', direction: 'ltr' }}>{c.phone}</span>
-                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{(c.org_name || '').split(' ')[0]}</span>
-                      <span style={{ fontSize: 10, color: '#9ca3af' }}>נציג: {c.agent_name}</span>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 12, color: '#6b7280', direction: 'ltr', fontWeight: 500 }}>{c.phone}</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>|</span>
+                      <span style={{ fontSize: 11, color: '#6b7280' }}>{(c.org_name || '').split(' ')[0]}</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>נציג: {c.agent_name}</span>
                     </div>
                   </div>
                 ))}

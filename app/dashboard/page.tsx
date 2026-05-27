@@ -413,15 +413,15 @@ function DashboardPage() {
             {/* Styled status buttons */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
               {statuses.map(s => {
-                const colorMap: Record<string, { bg: string, color: string, border: string }> = {
-                  'טופל':                    { bg: '#dcfce7', color: '#15803d', border: '#16a34a' },
-                  'טופל לאחר שיחת מנהל':   { bg: '#ccfbf1', color: '#0f766e', border: '#0d9488' },
-                  'בטיפול נציג':             { bg: '#dbeafe', color: '#1d4ed8', border: '#2563eb' },
-                  'בטיפול בשיחת מנהל':      { bg: '#ede9fe', color: '#6d28d9', border: '#7c3aed' },
-                  'הועבר לשיחת מנהל':       { bg: '#f3e8ff', color: '#9333ea', border: '#a855f7' },
-                  'אין מענה':                { bg: '#fef3c7', color: '#b45309', border: '#d97706' },
+                const colorMap: Record<string, { bg: string, activeBg: string, color: string, border: string }> = {
+                  'טופל':                   { bg: '#f0fdf4', activeBg: '#16a34a', color: '#15803d', border: '#86efac' },
+                  'טופל לאחר שיחת מנהל':  { bg: '#f0fdfa', activeBg: '#0d9488', color: '#0f766e', border: '#5eead4' },
+                  'בטיפול נציג':            { bg: '#eff4ff', activeBg: '#2563eb', color: '#1d4ed8', border: '#bfdbfe' },
+                  'בטיפול בשיחת מנהל':     { bg: '#f5f3ff', activeBg: '#7c3aed', color: '#6d28d9', border: '#ddd6fe' },
+                  'הועבר לשיחת מנהל':      { bg: '#fdf4ff', activeBg: '#a855f7', color: '#9333ea', border: '#e9d5ff' },
+                  'אין מענה':               { bg: '#fffbeb', activeBg: '#d97706', color: '#b45309', border: '#fde68a' },
                 }
-                const style = colorMap[s.name] || { bg: '#f3f4f6', color: '#374151', border: '#9ca3af' }
+                const style = colorMap[s.name] || { bg: '#f9fafb', activeBg: '#6b7280', color: '#374151', border: '#e5e7eb' }
                 const isSelected = editStatus === s.name
                 return (
                   <button
@@ -432,29 +432,20 @@ function DashboardPage() {
                       else setShowAddReminder(false)
                     }}
                     style={{
-                      padding: '8px 16px',
-                      borderRadius: 999,
+                      padding: '6px 14px',
+                      borderRadius: 8,
                       fontSize: 12,
-                      fontWeight: 700,
+                      fontWeight: isSelected ? 700 : 500,
                       cursor: 'pointer',
                       fontFamily: 'Heebo, sans-serif',
                       transition: 'all 0.15s',
-                      background: isSelected ? style.color : style.bg,
+                      background: isSelected ? style.activeBg : style.bg,
                       color: isSelected ? '#fff' : style.color,
-                      border: `2px solid ${style.border}`,
-                      boxShadow: isSelected ? `0 3px 10px ${style.color}50` : '0 1px 3px rgba(0,0,0,0.08)',
-                      transform: isSelected ? 'scale(1.06)' : 'scale(1)',
+                      border: `1.5px solid ${isSelected ? style.activeBg : style.border}`,
+                      boxShadow: isSelected ? `0 2px 6px ${style.activeBg}40` : 'none',
                       outline: 'none',
                     }}
-                  >
-                    {s.name === 'טופל' && '✅ '}
-                    {s.name === 'טופל לאחר שיחת מנהל' && '✅ '}
-                    {s.name === 'בטיפול נציג' && '⏳ '}
-                    {s.name === 'בטיפול בשיחת מנהל' && '🟣 '}
-                    {s.name === 'הועבר לשיחת מנהל' && '🟣 '}
-                    {s.name === 'אין מענה' && '📵 '}
-                    {s.name}
-                  </button>
+                  >{s.name}</button>
                 )
               })}
             </div>
