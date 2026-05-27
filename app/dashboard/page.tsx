@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import Topbar from '@/components/Topbar'
@@ -40,8 +41,9 @@ function MiniList({ cases, empty, onClick }: { cases: any[]; empty: string; onCl
   return <>{cases.map(c => <CaseCard key={c.id} c={c} onClick={() => onClick(c)} />)}</>
 }
 
-export default function DashboardPage() {
+function DashboardPage() {
   const { profile, loading } = useUser()
+  const searchParams = useSearchParams()
   const [cases, setCases] = useState<any[]>([])
   const [searchQ, setSearchQ] = useState('')
   const [searchResults, setSearchResults] = useState<any[]>([])
@@ -71,6 +73,15 @@ export default function DashboardPage() {
   }, [profile])
 
   useEffect(() => { loadCases() }, [loadCases])
+
+  // Auto-open case from URL ?openCase=X
+  useEffect(() => {
+    const caseId = searchParams?.get('openCase')
+    if (caseId && cases.length > 0) {
+      const c = cases.find(x => x.id === parseInt(caseId))
+      if (c) openCase(c)
+    }
+  }, [searchParams, cases])
 
   useEffect(() => {
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
@@ -506,5 +517,13 @@ export default function DashboardPage() {
 
       {toast && <div className="toast">{toast}</div>}
     </>
+  )
+}
+
+export default function DashboardPageWrapper() {
+  return (
+    <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: 'var(--text3)' }}>טוען...</div>}>
+      <DashboardPage />
+    </Suspense>
   )
 }
