@@ -31,6 +31,10 @@ export default function AdminPage() {
   const [benefits, setBenefits] = useState<any[]>([])
   const [newSupplier, setNewSupplier] = useState('')
   const [newBenefit, setNewBenefit] = useState('')
+  const [smsTemplates, setSmsTemplates] = useState<any[]>([])
+  const [newSms, setNewSms] = useState({ name: '', content: '', org_id: '', org_name: '' })
+  const [editingSms, setEditingSms] = useState<any>(null)
+
   const [toast, setToast] = useState('')
   const [resetPassUser, setResetPassUser] = useState<any>(null)
   const [newPass, setNewPass] = useState('')
@@ -39,7 +43,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (!profile) return
-    loadUsers(); loadStatuses(); loadOrgs(); loadSuppliers(); loadBenefits()
+    loadUsers(); loadStatuses(); loadOrgs(); loadSuppliers(); loadBenefits(); loadSmsTemplates()
   }, [profile])
 
   async function loadUsers() {
@@ -58,6 +62,27 @@ export default function AdminPage() {
     const { data } = await supabase.from('suppliers').select('*').order('name')
     setSuppliers(data || [])
   }
+  async function loadSmsTemplates() {
+    const { data } = await supabase.from('sms_templates').select('*').order('org_name').order('name')
+    setSmsTemplates(data || [])
+  }
+  async function addSmsTemplate() {
+    if (!newSms.name || !newSms.content || !newSms.org_id) { alert('שם, תוכן וארגון חובה'); return }
+    await supabase.from('sms_templates').insert({ ...newSms })
+    setNewSms({ name: '', content: '', org_id: '', org_name: '' })
+    loadSmsTemplates(); showToast('תבנית נוספה ✓')
+  }
+  async function updateSmsTemplate() {
+    if (!editingSms) return
+    await supabase.from('sms_templates').update({ name: editingSms.name, content: editingSms.content }).eq('id', editingSms.id)
+    setEditingSms(null); loadSmsTemplates(); showToast('תבנית עודכנה ✓')
+  }
+  async function deleteSmsTemplate(id: string) {
+    if (!confirm('למחוק תבנית?')) return
+    await supabase.from('sms_templates').delete().eq('id', id)
+    loadSmsTemplates()
+  }
+
   async function loadBenefits() {
     const { data } = await supabase.from('benefits').select('*').order('name')
     setBenefits(data || [])
@@ -141,6 +166,14 @@ export default function AdminPage() {
     await supabase.from('organizations').delete().eq('id', id)
     loadOrgs()
   }
+  async function deleteCat1(id: string) {
+    if (!confirm('למחוק סיווג ראשון? כל הסיווגים השניים והשלישיים שלו יימחקו גם')) return
+    await supabase.from('cat1').delete().eq('id', id)
+    loadCat1(selOrg)
+    setSelCat1('')
+    setCat2List([])
+    setCat3Map({})
+  }
   async function addCat1() {
     if (!selOrg || !newCat1Name.trim()) return
     await supabase.from('cat1').insert({ org_id: selOrg, name: newCat1Name, sort_order: cat1List.length + 1 })
@@ -207,7 +240,7 @@ export default function AdminPage() {
       <div style={{ padding: '22px 26px' }}>
         <div className="page-header"><div className="page-title">ניהול מערכת</div></div>
         <div className="tabs">
-          {[['users','משתמשים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות']].map(([k,v]) => (
+          {[['users','משתמשים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות']].map(([k,v]) => (
             <div key={k} className={`tab${tab===k?' active':''}`} onClick={() => setTab(k)}>{v}</div>
           ))}
         </div>
@@ -300,10 +333,25 @@ export default function AdminPage() {
               </div>
             </div>
             {selOrg && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 400 }}>
-                <input className="form-input" value={newCat1Name} onChange={e => setNewCat1Name(e.target.value)} placeholder="+ סיווג ראשון חדש" />
-                <button className="btn btn-primary btn-sm" onClick={addCat1}>הוסף</button>
-              </div>
+              <>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 400 }}>
+                  <input className="form-input" value={newCat1Name} onChange={e => setNewCat1Name(e.target.value)} placeholder="+ סיווג ראשון חדש" />
+                  <button className="btn btn-primary btn-sm" onClick={addCat1}>הוסף</button>
+                </div>
+                {cat1List.length > 0 && (
+                  <div className="card" style={{ padding: 0, maxWidth: 400, marginBottom: 16 }}>
+                    <table>
+                      <thead><tr><th>סיווג ראשון</th><th></th></tr></thead>
+                      <tbody>{cat1List.map(c => (
+                        <tr key={c.id}>
+                          <td style={{ fontWeight: 500 }}>{c.name}</td>
+                          <td><button className="btn btn-xs btn-danger" onClick={() => deleteCat1(c.id)}>מחק</button></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
             {selCat1 && (
               <>
@@ -362,6 +410,55 @@ export default function AdminPage() {
               <div className="card" style={{ padding: 0 }}><table><thead><tr><th>שם הטבה</th><th></th></tr></thead>
                 <tbody>{benefits.map(b => (<tr key={b.id}><td>{b.name}</td><td><button className="btn btn-xs btn-danger" onClick={() => deleteBenefit(b.id)}>מחק</button></td></tr>))}</tbody>
               </table></div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'sms' && (
+          <div>
+            <div className="card card-pad" style={{ marginBottom: 16, maxWidth: 600 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>הוסף תבנית SMS חדשה</div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">שם התבנית</label>
+                  <input className="form-input" value={newSms.name} onChange={e => setNewSms(p => ({ ...p, name: e.target.value }))} placeholder="לדוגמא: אישור קבלת פניה" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">ארגון</label>
+                  <select className="form-input" value={newSms.org_id} onChange={e => { const o = orgs.find(x => x.id === e.target.value); setNewSms(p => ({ ...p, org_id: e.target.value, org_name: o?.name || '' })) }}>
+                    <option value="">בחר ארגון</option>
+                    {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">תוכן ההודעה <span style={{ color: 'var(--text3)', fontWeight: 400 }}>(השתמש ב-{'{שם}'} לשם הלקוח)</span></label>
+                <textarea className="form-input" rows={3} value={newSms.content} onChange={e => setNewSms(p => ({ ...p, content: e.target.value }))} placeholder="שלום {'{'}שם{'}'}, פנייתך התקבלה ותטופל בהקדם." />
+              </div>
+              <button className="btn btn-primary" onClick={addSmsTemplate}>+ הוסף תבנית</button>
+            </div>
+            <div className="card" style={{ padding: 0 }}>
+              <table>
+                <thead><tr><th>שם תבנית</th><th>ארגון</th><th>תוכן</th><th>פעולות</th></tr></thead>
+                <tbody>
+                  {smsTemplates.length ? smsTemplates.map(t => (
+                    <tr key={t.id}>
+                      <td>{editingSms?.id === t.id ? <input className="form-input" value={editingSms.name} onChange={e => setEditingSms((p: any) => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} /> : <span style={{ fontWeight: 500 }}>{t.name}</span>}</td>
+                      <td><span className="badge b-gray" style={{ fontSize: 10 }}>{(t.org_name || '').split(' ')[0]}</span></td>
+                      <td>{editingSms?.id === t.id ? <textarea className="form-input" rows={2} value={editingSms.content} onChange={e => setEditingSms((p: any) => ({ ...p, content: e.target.value }))} style={{ fontSize: 12 }} /> : <span style={{ fontSize: 12, color: 'var(--text2)' }}>{t.content.slice(0, 60)}{t.content.length > 60 ? '...' : ''}</span>}</td>
+                      <td style={{ display: 'flex', gap: 6 }}>
+                        {editingSms?.id === t.id ? <>
+                          <button className="btn btn-xs btn-success" onClick={updateSmsTemplate}>שמור</button>
+                          <button className="btn btn-xs" onClick={() => setEditingSms(null)}>ביטול</button>
+                        </> : <>
+                          <button className="btn btn-xs" onClick={() => setEditingSms({ ...t })}>ערוך</button>
+                          <button className="btn btn-xs btn-danger" onClick={() => deleteSmsTemplate(t.id)}>מחק</button>
+                        </>}
+                      </td>
+                    </tr>
+                  )) : <tr><td colSpan={4} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text3)' }}>אין תבניות עדיין</td></tr>}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

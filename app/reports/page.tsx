@@ -34,12 +34,16 @@ export default function ReportsPage() {
   const [fCat2, setFCat2] = useState('')
   const [fCat3, setFCat3] = useState('')
 
+  const [fAgent, setFAgent] = useState('')
+  const [agents, setAgents] = useState<any[]>([])
+
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
   useEffect(() => {
     if (!profile) return
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
     supabase.from('organizations').select('*').order('name').then(({ data }) => setOrgs(data || []))
+    supabase.from('profiles').select('id, full_name').eq('active', true).order('full_name').then(({ data }) => setAgents(data || []))
     loadReport()
   }, [profile])
 
@@ -50,6 +54,7 @@ export default function ReportsPage() {
     if (fCat1) q = q.eq('cat1_name', fCat1)
     if (fCat2) q = q.eq('cat2_name', fCat2)
     if (fCat3) q = q.eq('cat3_name', fCat3)
+    if (fAgent) q = q.eq('agent_id', fAgent)
     const { data } = await q.order('created_at', { ascending: false })
     const d = data || []
     setCases(d)
@@ -145,6 +150,13 @@ export default function ReportsPage() {
               </select>
             </div>
           </div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">נציג</label>
+              <select className="form-input" value={fAgent} onChange={e => setFAgent(e.target.value)}>
+                <option value="">כל הנציגים</option>{agents.map(a => <option key={a.id} value={a.id}>{a.full_name}</option>)}
+              </select>
+            </div>
+            <div className="form-group" /></div>
           <div className="form-row-3" style={{ marginBottom: 14 }}>
             <div className="form-group"><label className="form-label">סיווג ראשון</label>
               <select className="form-input" value={fCat1} onChange={e => setFCat1(e.target.value)}>

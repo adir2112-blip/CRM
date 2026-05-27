@@ -89,14 +89,36 @@ function DashboardPage() {
 
   const [showAddReminder, setShowAddReminder] = useState(false)
   const [newReminder, setNewReminder] = useState({ remind_at: '', note: '' })
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'sms'>('details')
+  const [history, setHistory] = useState<any[]>([])
+  const [smsTemplates, setSmsTemplates] = useState<any[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [smsText, setSmsText] = useState('')
+  const [showSmsPanel, setShowSmsPanel] = useState(false)
 
   async function openCase(c: any) {
     setSelectedCase(c)
     setEditStatus(c.status_name)
+    setCaseTab('details')
+    setShowSmsPanel(false)
+    setSmsText('')
+    setSelectedTemplate('')
     const { data } = await supabase.from('case_logs').select('*').eq('case_id', c.id).order('created_at')
     setLogs(data || [])
     setShowAddReminder(false)
     setNewReminder({ remind_at: '', note: '' })
+    // Load history - all cases for same customer by phone or id_number
+    if (c.phone || c.id_number) {
+      let q = supabase.from('cases').select('id, created_at, status_name, cat1_name, cat2_name, agent_name, org_name').neq('id', c.id)
+      if (c.phone) q = q.eq('phone', c.phone)
+      const { data: hist } = await q.order('created_at', { ascending: false }).limit(20)
+      setHistory(hist || [])
+    }
+    // Load SMS templates for this org
+    if (c.org_id) {
+      const { data: tmpl } = await supabase.from('sms_templates').select('*').eq('org_id', c.org_id).order('name')
+      setSmsTemplates(tmpl || [])
+    }
   }
 
   async function deleteCase(id: number) {
@@ -394,6 +416,17 @@ function DashboardPage() {
               </div>
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
             </div>
+
+            {/* Tabs */}
+            <div className="tabs" style={{ marginBottom: 14 }}>
+              <div className={`tab${caseTab==='details'?' active':''}`} onClick={() => setCaseTab('details')}>📋 פרטים ותיעוד</div>
+              <div className={`tab${caseTab==='history'?' active':''}`} onClick={() => setCaseTab('history')}>
+                🕐 היסטוריית לקוח {history.length > 0 && <span className="badge b-blue" style={{ fontSize: 10, marginRight: 4 }}>{history.length}</span>}
+              </div>
+              <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 שליחת SMS</div>
+            </div>
+            {/* Details tab */}
+            {caseTab === 'details' && <>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[['שם לקוח', selectedCase.customer_name], ['ארגון', selectedCase.org_name], ['טלפון', selectedCase.phone], ['ת״ז', selectedCase.id_number], ['סיווג 1', selectedCase.cat1_name], ['סיווג 2', selectedCase.cat2_name], ['סיווג 3', selectedCase.cat3_name], ['נציג', selectedCase.agent_name]].map(([l, v]) => v ? (
                 <div key={l} style={{ background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 13px' }}>
@@ -485,6 +518,76 @@ function DashboardPage() {
                   </div>
                 </div>
                 <button className="btn btn-primary btn-sm" onClick={saveReminder}>שמור תזכורת</button>
+              </div>
+            )}
+            </>}
+
+            {/* History tab */}
+            {caseTab === 'history' && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>
+                  כל הפניות הקודמות של {selectedCase.customer_name} ({selectedCase.phone})
+                </div>
+                {history.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>אין פניות קודמות</div>
+                ) : history.map(h => (
+                  <div key={h.id} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 14px', marginBottom: 8, cursor: 'pointer', border: '1px solid var(--border)' }}
+                    onClick={() => openCase(h)}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>פניה #{h.id}</span>
+                      <span className={`badge ${statusBadgeClass(h.status_name)}`}>{h.status_name}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+                      {h.cat1_name}{h.cat2_name ? ' › ' + h.cat2_name : ''} | נציג: {h.agent_name}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{fmt(h.created_at)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* SMS tab */}
+            {caseTab === 'sms' && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+                  📱 שליחה ל: <strong style={{ color: 'var(--text)', direction: 'ltr', display: 'inline-block' }}>{selectedCase.phone}</strong>
+                </div>
+                {smsTemplates.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">בחר תבנית</label>
+                    <select className="form-input" value={selectedTemplate} onChange={e => {
+                      setSelectedTemplate(e.target.value)
+                      const tmpl = smsTemplates.find(t => t.id === e.target.value)
+                      if (tmpl) setSmsText(tmpl.content.replace('{שם}', selectedCase.customer_name))
+                    }}>
+                      <option value="">בחר תבנית...</option>
+                      {smsTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {smsTemplates.length === 0 && (
+                  <div style={{ padding: '10px 14px', background: 'var(--amber-lt)', borderRadius: 8, fontSize: 12, color: 'var(--amber)', marginBottom: 12 }}>
+                    אין תבניות SMS לארגון זה. הוסף תבניות בניהול → SMS תבניות.
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">תוכן ההודעה</label>
+                  <textarea className="form-input" rows={4} value={smsText} onChange={e => setSmsText(e.target.value)} placeholder="הקלד את ההודעה..." />
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{smsText.length} תווים</div>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+                  onClick={() => {
+                    // SMS provider not connected yet — open WhatsApp as fallback
+                    const msg = encodeURIComponent(smsText)
+                    const phone = selectedCase.phone.replace(/\D/g, '').replace(/^0/, '972')
+                    window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
+                    showToast('נפתח WhatsApp ✓')
+                  }}>
+                  📱 שלח ב-WhatsApp (SMS בקרוב)
+                </button>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8, textAlign: 'center' }}>
+                  * SMS ישלח אוטומטית לאחר חיבור ספק
+                </div>
               </div>
             )}
           </div>
