@@ -141,7 +141,14 @@ export default function AdminPage() {
     await supabase.from('organizations').delete().eq('id', id)
     loadOrgs()
   }
-  async function addCat1() {
+  async function deleteCat1(id: string) {
+    if (!confirm('למחוק סיווג ראשון? כל הסיווגים השניים והשלישיים שלו יימחקו גם')) return
+    await supabase.from('cat1').delete().eq('id', id)
+    loadCat1(selOrg)
+    setSelCat1('')
+    setCat2List([])
+    setCat3Map({})
+  }
     if (!selOrg || !newCat1Name.trim()) return
     await supabase.from('cat1').insert({ org_id: selOrg, name: newCat1Name, sort_order: cat1List.length + 1 })
     setNewCat1Name(''); loadCat1(selOrg); showToast('סיווג נוסף ✓')
@@ -300,10 +307,25 @@ export default function AdminPage() {
               </div>
             </div>
             {selOrg && (
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 400 }}>
-                <input className="form-input" value={newCat1Name} onChange={e => setNewCat1Name(e.target.value)} placeholder="+ סיווג ראשון חדש" />
-                <button className="btn btn-primary btn-sm" onClick={addCat1}>הוסף</button>
-              </div>
+              <>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 400 }}>
+                  <input className="form-input" value={newCat1Name} onChange={e => setNewCat1Name(e.target.value)} placeholder="+ סיווג ראשון חדש" />
+                  <button className="btn btn-primary btn-sm" onClick={addCat1}>הוסף</button>
+                </div>
+                {cat1List.length > 0 && (
+                  <div className="card" style={{ padding: 0, maxWidth: 400, marginBottom: 16 }}>
+                    <table>
+                      <thead><tr><th>סיווג ראשון</th><th></th></tr></thead>
+                      <tbody>{cat1List.map(c => (
+                        <tr key={c.id}>
+                          <td style={{ fontWeight: 500 }}>{c.name}</td>
+                          <td><button className="btn btn-xs btn-danger" onClick={() => deleteCat1(c.id)}>מחק</button></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
             {selCat1 && (
               <>

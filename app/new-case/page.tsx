@@ -89,18 +89,30 @@ export default function NewCasePage() {
     if (missing.length) { alert('שדות חובה חסרים:\n' + missing.join(', ')); return }
 
     setSaving(true)
-    const { error } = await supabase.from('cases').insert({
-      ...form,
+    const insertData: any = {
+      customer_name: form.customer_name,
+      phone: form.phone,
+      id_number: form.id_number,
+      subject: form.subject,
+      content: form.content,
       org_id: form.org_id || null,
+      org_name: form.org_name || null,
       status_id: form.status_id || null,
+      status_name: form.status_name || null,
       cat1_id: form.cat1_id || null,
+      cat1_name: form.cat1_name || null,
       cat2_id: form.cat2_id || null,
+      cat2_name: form.cat2_name || null,
       cat3_id: form.cat3_id || null,
+      cat3_name: form.cat3_name || null,
       supplier_id: form.supplier_id || null,
+      supplier_name: form.supplier_name || null,
       benefit_id: form.benefit_id || null,
+      benefit_name: form.benefit_name || null,
       agent_id: profile.id,
       agent_name: profile.full_name,
-    })
+    }
+    const { error } = await supabase.from('cases').insert(insertData)
     setSaving(false)
     if (error) { alert('שגיאה בשמירה: ' + error.message); return }
     setToast('פניה נשמרה ✓')
