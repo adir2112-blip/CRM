@@ -454,19 +454,21 @@ function DashboardPage() {
                 {filterBar}
                 <div style={{ overflowY:'auto', maxHeight:260 }}>
                   <table style={{ fontSize:12 }}>
-                    <thead><tr><th>ארגון</th><th>סיווג ראשון</th><th>סיווג שני</th><th style={{ textAlign:'center' }}>כמות</th></tr></thead>
+                    <thead><tr><th>ארגון</th><th>סיווג ראשון</th><th>סיווג שני</th><th style={{ textAlign:'center' }}>כמות</th><th style={{ textAlign:'center' }}>%</th></tr></thead>
                     <tbody>
                       {tableRows.length ? tableRows.map((r:any,i:number) => {
                         const rowCases = filteredForChart.filter((c:any) => c.org_name===r.org && c.cat1_name===r.cat1 && c.cat2_name===r.cat2)
+                        const pct = filteredForChart.length > 0 ? Math.round(r.count / filteredForChart.length * 100) : 0
                         return (
                           <tr key={i} style={{ cursor:'pointer' }} onClick={() => setRecurringModal({ title:`${r.cat2} — ${(r.org||'').split(' ')[0]}`, cases:rowCases })}>
                             <td><span className="badge b-gray" style={{ fontSize:10 }}>{(r.org||'').split(' ')[0]}</span></td>
                             <td style={{ color:'var(--text2)' }}>{r.cat1}</td>
                             <td style={{ fontWeight:500, color:'var(--accent)' }}>{r.cat2}</td>
                             <td style={{ textAlign:'center' }}><span className={`badge ${i<3?'b-red':'b-gray'}`} style={{ fontSize:11 }}>{r.count}</span></td>
+                            <td style={{ textAlign:'center', fontSize:11, color: i<3?'#dc2626':'var(--text3)', fontWeight:600 }}>{pct}%</td>
                           </tr>
                         )
-                      }) : <tr><td colSpan={4} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין נתונים</td></tr>}
+                      }) : <tr><td colSpan={5} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין נתונים</td></tr>}
                     </tbody>
                   </table>
                 </div>

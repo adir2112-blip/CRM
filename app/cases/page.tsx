@@ -56,7 +56,7 @@ export default function CasesPage() {
       if (q && !c.customer_name?.toLowerCase().includes(q) && !c.phone?.includes(q) && !c.id_number?.includes(q)) return false
       return true
     }))
-  }, [search, fStatus, fOrg, fFrom, fTo, cases])
+  }, [search, fStatus, fOrg, fAgent, fFrom, fTo, cases])
 
   async function openCase(c: any) {
     setSelectedCase(c)

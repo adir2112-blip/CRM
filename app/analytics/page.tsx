@@ -61,7 +61,9 @@ export default function AnalyticsPage() {
   const [orgs, setOrgs] = useState<any[]>([])
   const [compareMode, setCompareMode] = useState('month')
   const [fOrg, setFOrg] = useState('')
+  const [recurringModal, setRecurringModal] = useState<{title:string, cases:any[]} | null>(null)
   const [trendDays, setTrendDays] = useState(30)
+  const [selectedCase, setSelectedCase] = useState<any>(null)
 
   useEffect(() => {
     if (!profile) return
@@ -254,7 +256,13 @@ export default function AnalyticsPage() {
             <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>🔁 פניות חוזרות — Top 10 סיווג שני</div>
             <div style={{ overflowY: 'auto', maxHeight: 260 }}>
               {recurringData.length > 0 ? recurringData.map((r, i) => (
-                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div key={r.name} onClick={() => {
+                  const rowCases = curCases.filter(c => c.cat2_name === r.name)
+                  setRecurringModal({ title: r.name, cases: rowCases })
+                }} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, cursor: 'pointer', padding: '6px 8px', borderRadius: 8, background: 'transparent' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#eff4ff')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
                   <span style={{ fontSize: 11, fontWeight: 700, color: i < 3 ? '#dc2626' : '#9ca3af', minWidth: 20 }}>#{i + 1}</span>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{r.name}</div>
@@ -313,6 +321,59 @@ export default function AnalyticsPage() {
           </table>
         </div>
       </div>
+
+      {/* Recurring modal */}
+      {recurringModal && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setRecurringModal(null) }}>
+          <div className="modal" style={{ maxWidth: 800 }}>
+            <div className="modal-header">
+              <div className="modal-title">🔁 {recurringModal.title} ({recurringModal.cases.length} פניות)</div>
+              <button className="close-btn" onClick={() => setRecurringModal(null)}>✕</button>
+            </div>
+            <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+              <table>
+                <thead><tr><th>#</th><th>שם לקוח</th><th>טלפון</th><th>ארגון</th><th>סטטוס</th><th>נציג</th><th>תאריך</th></tr></thead>
+                <tbody>
+                  {recurringModal.cases.map(c => (
+                    <tr key={c.id} style={{ cursor: 'pointer' }} onClick={() => { setSelectedCase(c); setRecurringModal(null) }}>
+                      <td className="td-muted">#{c.id}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--accent)' }}>{c.customer_name}</td>
+                      <td className="td-mono">{c.phone}</td>
+                      <td><span className="badge b-gray" style={{ fontSize: 10 }}>{(c.org_name||'').split(' ')[0]}</span></td>
+                      <td><span className={`badge ${c.status_name?.includes('טופל')?'b-green':c.status_name==='אין מענה'?'b-amber':'b-blue'}`}>{c.status_name}</span></td>
+                      <td style={{ color: 'var(--text2)' }}>{c.agent_name}</td>
+                      <td className="td-muted" style={{ fontSize: 11 }}>{new Date(c.created_at).toLocaleDateString('he-IL')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Case detail modal */}
+      {selectedCase && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setSelectedCase(null) }}>
+          <div className="modal">
+            <div className="modal-header">
+              <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
+              <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              {[['שם לקוח',selectedCase.customer_name],['ארגון',selectedCase.org_name],['טלפון',selectedCase.phone],['ת״ז',selectedCase.id_number],['סיווג 1',selectedCase.cat1_name],['סיווג 2',selectedCase.cat2_name],['סיווג 3',selectedCase.cat3_name],['נציג',selectedCase.agent_name]].map(([l,v]) => v ? (
+                <div key={l} style={{ background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 13px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', marginBottom: 3 }}>{l}</div>
+                  <div style={{ fontSize: 13 }}>{v}</div>
+                </div>
+              ) : null)}
+            </div>
+            {selectedCase.content && (
+              <div style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: 'var(--text2)', lineHeight: 1.6 }}>{selectedCase.content}</div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   )
 }

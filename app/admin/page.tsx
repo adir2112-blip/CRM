@@ -36,9 +36,11 @@ export default function AdminPage() {
   const [newSms, setNewSms] = useState({ name: '', content: '', org_id: '', org_name: '' })
   const [editingSms, setEditingSms] = useState<any>(null)
 
-  const [toast, setToast] = useState('')
+  const [editingUserOrgs, setEditingUserOrgs] = useState<any>(null)
+  const [editUserOrgsList, setEditUserOrgsList] = useState<string[]>([])
   const [resetPassUser, setResetPassUser] = useState<any>(null)
   const [newPass, setNewPass] = useState('')
+  const [toast, setToast] = useState('')
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -135,6 +137,14 @@ export default function AdminPage() {
     setNewUserOrgs([])
     showToast('משתמש נוסף ✓')
     loadUsers()
+  }
+
+  async function saveUserOrgs() {
+    if (!editingUserOrgs) return
+    await supabase.from('profiles').update({ allowed_orgs: editUserOrgsList.length > 0 ? editUserOrgsList : null }).eq('id', editingUserOrgs.id)
+    setEditingUserOrgs(null)
+    loadUsers()
+    showToast('מחלקות עודכנו ✓')
   }
 
   async function resetPassword() {
@@ -313,6 +323,7 @@ export default function AdminPage() {
                     </td>
                     <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs" style={{ background: 'var(--accent-lt)', color: 'var(--accent)', border: '1px solid rgba(37,99,235,0.2)' }} onClick={() => { setResetPassUser(u); setNewPass('') }}>איפוס סיסמא</button>
+                      {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }} onClick={() => { setEditingUserOrgs(u); setEditUserOrgsList(u.allowed_orgs || []) }}>מחלקות</button>}
                       {u.id !== profile.id && u.active && <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}>השבת</button>}
                       {u.id !== profile.id && <button className="btn btn-xs" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }} onClick={() => hardDeleteUser(u.id)}>מחק</button>}
                     </td>
@@ -516,6 +527,37 @@ export default function AdminPage() {
               <input className="form-input" type="password" value={newPass} onChange={e => setNewPass(e.target.value)} placeholder="לפחות 6 תווים" />
             </div>
             <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={resetPassword}>עדכן סיסמא</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit user orgs modal */}
+      {editingUserOrgs && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setEditingUserOrgs(null) }}>
+          <div className="modal modal-sm">
+            <div className="modal-header">
+              <div className="modal-title">מחלקות מורשות — {editingUserOrgs.full_name}</div>
+              <button className="close-btn" onClick={() => setEditingUserOrgs(null)}>✕</button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>ריק = גישה לכל המחלקות</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
+              {orgs.map(o => {
+                const checked = editUserOrgsList.includes(o.id)
+                return (
+                  <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', padding: '6px 12px', borderRadius: 999, background: checked ? '#dbeafe' : '#f9fafb', border: `1.5px solid ${checked ? '#2563eb' : '#e5e7eb'}`, color: checked ? '#1d4ed8' : '#374151', fontFamily: 'Heebo, sans-serif' }}>
+                    <input type="checkbox" checked={checked} onChange={e => {
+                      if (e.target.checked) setEditUserOrgsList(prev => [...prev, o.id])
+                      else setEditUserOrgsList(prev => prev.filter(id => id !== o.id))
+                    }} style={{ display: 'none' }} />
+                    {checked ? '✓ ' : ''}{o.name}
+                  </label>
+                )
+              })}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={saveUserOrgs}>שמור</button>
+              <button className="btn" onClick={() => { setEditUserOrgsList([]); saveUserOrgs() }}>נקה הכל (גישה לכולם)</button>
+            </div>
           </div>
         </div>
       )}
