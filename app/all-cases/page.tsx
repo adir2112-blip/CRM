@@ -49,9 +49,19 @@ export default function AllCasesAgentPage() {
 
   useEffect(() => {
     if (!profile) return
-    supabase.from('cases').select('*').order('updated_at', { ascending: false }).then(({ data }) => setCases(data || []))
+    async function loadData() {
+      const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs').eq('id', profile.id).single()
+      const allowedOrgs = myProfile?.allowed_orgs
+      let q = supabase.from('cases').select('*').order('updated_at', { ascending: false })
+      if (allowedOrgs?.length > 0) q = q.in('org_id', allowedOrgs)
+      const { data } = await q
+      setCases(data || [])
+      // Filter org dropdown too
+      const { data: allOrgs } = await supabase.from('organizations').select('*').order('name')
+      setOrgs(allowedOrgs?.length > 0 ? (allOrgs || []).filter((o: any) => allowedOrgs.includes(o.id)) : (allOrgs || []))
+    }
+    loadData()
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
-    supabase.from('organizations').select('*').order('name').then(({ data }) => setOrgs(data || []))
   }, [profile])
 
   useEffect(() => {

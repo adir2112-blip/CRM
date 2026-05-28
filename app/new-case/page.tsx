@@ -34,9 +34,9 @@ export default function NewCasePage() {
   const [toast, setToast] = useState('')
 
   useEffect(() => {
+    if (!profile) return
     async function loadOrgs() {
       const { data: allOrgs } = await supabase.from('organizations').select('*').eq('active', true).order('name')
-      if (!profile) { setOrgs(allOrgs || []); return }
       const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs').eq('id', profile.id).single()
       const allowedOrgs = myProfile?.allowed_orgs
       setOrgs(allowedOrgs?.length > 0 ? (allOrgs || []).filter((o: any) => allowedOrgs.includes(o.id)) : (allOrgs || []))
@@ -57,7 +57,7 @@ export default function NewCasePage() {
     })
     supabase.from('suppliers').select('*').eq('active', true).order('name').then(({ data }) => setSuppliers(data || []))
     supabase.from('benefits').select('*').eq('active', true).order('name').then(({ data }) => setBenefits(data || []))
-  }, [])
+  }, [profile])
 
   async function handleOrgChange(orgId: string) {
     const org = orgs.find(o => o.id === orgId)
