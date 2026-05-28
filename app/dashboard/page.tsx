@@ -610,7 +610,7 @@ function DashboardPage() {
                         <div style={{ fontSize:11, color:'var(--text3)' }}>{formatBytes(att.file_size)} · {att.uploader_name}</div>
                       </div>
                       <button className="btn btn-xs btn-primary" onClick={() => downloadFile(att)}>הורד</button>
-                      <button className="btn btn-xs btn-danger" onClick={() => deleteFile(att)}>מחק</button>
+                      {isSuperAdmin && <button className="btn btn-xs btn-danger" onClick={() => deleteFile(att)}>מחק</button>}
                     </div>
                   )
                 })}

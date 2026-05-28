@@ -22,10 +22,15 @@ export default function CasesPage() {
   const [newLog, setNewLog] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [toast, setToast] = useState('')
-  const [caseTab, setCaseTab] = useState<'details'|'sms'>('details')
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'>('details')
   const [smsTemplates, setSmsTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [smsText, setSmsText] = useState('')
+  const [history, setHistory] = useState<any[]>([])
+  const [attachments, setAttachments] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [showAddReminder, setShowAddReminder] = useState(false)
+  const [newReminder, setNewReminder] = useState({ remind_at: '', note: '' })
   const [fAgent, setFAgent] = useState('')
   const [agentsList, setAgentsList] = useState<any[]>([])
   const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
@@ -64,12 +69,20 @@ export default function CasesPage() {
     setCaseTab('details')
     setSmsText('')
     setSelectedTemplate('')
-    const { data } = await supabase.from('case_logs').select('*').eq('case_id', c.id).order('created_at')
-    setLogs(data || [])
+    setShowAddReminder(false)
+    setNewReminder({ remind_at: '', note: '' })
+    const { data: logsData } = await supabase.from('case_logs').select('*').eq('case_id', c.id).order('created_at')
+    setLogs(logsData || [])
     if (c.org_id) {
       const { data: tmpl } = await supabase.from('sms_templates').select('*').eq('org_id', c.org_id).order('name')
       setSmsTemplates(tmpl || [])
     }
+    if (c.phone) {
+      const { data: hist } = await supabase.from('cases').select('id,created_at,status_name,cat1_name,cat2_name,agent_name,org_name').neq('id', c.id).eq('phone', c.phone).order('created_at', { ascending: false }).limit(20)
+      setHistory(hist || [])
+    } else setHistory([])
+    const { data: att } = await supabase.from('case_attachments').select('*').eq('case_id', c.id).order('created_at')
+    setAttachments(att || [])
   }
 
   async function saveStatus() {
@@ -89,6 +102,43 @@ export default function CasesPage() {
     setNewLog('')
     showToast('תיעוד נוסף ✓')
   }
+
+  async function saveReminder() {
+    if (!newReminder.remind_at || !newReminder.note) { alert('חובה: תאריך+שעה והערה'); return }
+    await supabase.from('reminders').insert({
+      case_id: selectedCase.id, agent_id: profile.id, agent_name: profile.full_name,
+      customer_name: selectedCase.customer_name, org_name: selectedCase.org_name,
+      remind_at: newReminder.remind_at, note: newReminder.note,
+    })
+    setShowAddReminder(false)
+    setNewReminder({ remind_at: '', note: '' })
+    showToast('תזכורת נוספה ✓')
+  }
+
+  async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !selectedCase) return
+    setUploading(true)
+    const ext = file.name.split('.').pop() || ''
+    const safeName = Date.now() + '_' + file.name.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_') || 'file.' + ext
+    const path = `${selectedCase.id}/${safeName}`
+    const { error } = await supabase.storage.from('case-attachments').upload(path, file)
+    if (!error) {
+      await supabase.from('case_attachments').insert({ case_id: selectedCase.id, uploaded_by: profile.id, uploader_name: profile.full_name, file_name: file.name, file_size: file.size, file_type: file.type, storage_path: path })
+      const { data } = await supabase.from('case_attachments').select('*').eq('case_id', selectedCase.id).order('created_at')
+      setAttachments(data || [])
+      showToast('קובץ הועלה ✓')
+    } else showToast('שגיאה: ' + error.message)
+    setUploading(false)
+    e.target.value = ''
+  }
+
+  async function downloadFile(att: any) {
+    const { data } = await supabase.storage.from('case-attachments').createSignedUrl(att.storage_path, 60)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  function formatBytes(b: number) { if (!b) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB' }
 
   async function deleteCase(id: number) {
     if (!confirm('למחוק פניה לצמיתות?')) return
@@ -201,6 +251,12 @@ export default function CasesPage() {
             </div>
             <div className="tabs" style={{ marginBottom: 14 }}>
               <div className={`tab${caseTab==='details'?' active':''}`} onClick={() => setCaseTab('details')}>📋 פרטים</div>
+              <div className={`tab${caseTab==='history'?' active':''}`} onClick={() => setCaseTab('history')}>
+                🕐 היסטוריה {history.length > 0 && <span className="badge b-blue" style={{ fontSize: 10, marginRight: 4 }}>{history.length}</span>}
+              </div>
+              <div className={`tab${caseTab==='files'?' active':''}`} onClick={() => setCaseTab('files')}>
+                📎 קבצים {attachments.length > 0 && <span className="badge b-gray" style={{ fontSize: 10, marginRight: 4 }}>{attachments.length}</span>}
+              </div>
               <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 SMS</div>
             </div>
             {caseTab === 'details' && <>
@@ -263,7 +319,70 @@ export default function CasesPage() {
               <textarea className="form-input" rows={2} value={newLog} onChange={e => setNewLog(e.target.value)} placeholder="הוסף הערה..." style={{ flex: 1 }} />
               <button className="btn btn-success btn-sm" style={{ alignSelf: 'flex-start' }} onClick={addLog}>+ הוסף</button>
             </div>
+            <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase' }}>🔔 תזכורת</div>
+              <button className="btn btn-xs" style={{ background: '#eff4ff', color: '#2563eb', border: '1px solid #bfdbfe' }} onClick={() => setShowAddReminder(!showAddReminder)}>{showAddReminder ? 'ביטול' : '+ הוסף'}</button>
+            </div>
+            {showAddReminder && (
+              <div style={{ background: '#eff4ff', borderRadius: 8, padding: '12px 14px', marginBottom: 10 }}>
+                <div className="form-row" style={{ marginBottom: 10 }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">תאריך ושעה *</label>
+                    <input className="form-input" type="datetime-local" value={newReminder.remind_at} onChange={e => setNewReminder(p => ({ ...p, remind_at: e.target.value }))} />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">הערה *</label>
+                    <input className="form-input" value={newReminder.note} onChange={e => setNewReminder(p => ({ ...p, note: e.target.value }))} placeholder="לחזור ללקוח..." />
+                  </div>
+                </div>
+                <button className="btn btn-primary btn-sm" onClick={saveReminder}>שמור תזכורת</button>
+              </div>
+            )}
             </>}
+
+            {caseTab === 'history' && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 12 }}>כל הפניות הקודמות של {selectedCase.customer_name}</div>
+                {history.length === 0 ? <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>אין פניות קודמות</div>
+                : history.map(h => (
+                  <div key={h.id} style={{ background: 'var(--bg3)', borderRadius: 8, padding: '10px 14px', marginBottom: 8, cursor: 'pointer', border: '1px solid var(--border)' }} onClick={() => openCase(h)}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontWeight: 600, fontSize: 13 }}>פניה #{h.id}</span>
+                      <span className={`badge ${statusBadgeClass(h.status_name)}`}>{h.status_name}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text2)' }}>{h.cat1_name}{h.cat2_name?' › '+h.cat2_name:''} | {h.agent_name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{fmt(h.created_at)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {caseTab === 'files' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>קבצים ({attachments.length})</div>
+                  <label style={{ cursor: 'pointer' }}>
+                    <input type="file" style={{ display: 'none' }} onChange={uploadFile} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.mp3,.mp4,.wav" />
+                    <span className="btn btn-primary btn-sm">{uploading ? '⏳ מעלה...' : '+ העלה'}</span>
+                  </label>
+                </div>
+                {attachments.length === 0
+                  ? <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}><div style={{ fontSize: 28 }}>📎</div><div style={{ fontSize: 13 }}>אין קבצים</div></div>
+                  : attachments.map(att => (
+                    <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8, marginBottom: 8, border: '1px solid var(--border)' }}>
+                      <span style={{ fontSize: 20 }}>{att.file_type?.startsWith('image/') ? '🖼️' : att.file_type === 'application/pdf' ? '📄' : '📎'}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.file_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatBytes(att.file_size)} · {att.uploader_name}</div>
+                      </div>
+                      <button className="btn btn-xs btn-primary" onClick={() => downloadFile(att)}>הורד</button>
+                      {isSuperAdmin && <button className="btn btn-xs btn-danger" onClick={async () => { if(!confirm('למחוק?'))return; await supabase.storage.from('case-attachments').remove([att.storage_path]); await supabase.from('case_attachments').delete().eq('id',att.id); setAttachments(prev=>prev.filter(a=>a.id!==att.id)); showToast('נמחק ✓') }}>מחק</button>}
+                    </div>
+                  ))
+                }
+              </div>
+            )}
             {caseTab === 'sms' && (
               <div>
                 <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
