@@ -123,6 +123,10 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
           boxShadow: '0 2px 10px rgba(249,115,22,0.45)', textDecoration: 'none',
           transition: 'all 0.15s', letterSpacing: '0.2px'
         }}>＋ פניה חדשה</Link>
+        {/* Agent-only links */}
+        {!isAdmin && <Link href="/my-cases" className={`nav-btn${pathname === '/my-cases' ? ' active' : ''}`}>⏳ פניות בטיפול</Link>}
+        {!isAdmin && <Link href="/all-cases" className={`nav-btn${pathname === '/all-cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
+        {/* Admin-only links */}
         {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
         {isAdmin && <Link href="/agents-status" className={`nav-btn${pathname === '/agents-status' ? ' active' : ''}`}>👥 בטיפול נציגים</Link>}
         {isAdmin && <Link href="/reports" className={`nav-btn${pathname === '/reports' ? ' active' : ''}`}>📊 דוחות</Link>}

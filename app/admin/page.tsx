@@ -49,6 +49,17 @@ export default function AdminPage() {
   async function loadUsers() {
     const { data } = await supabase.from('profiles').select('*').order('full_name')
     setUsers(data || [])
+    // Also fetch last sign in from auth - use the API
+    try {
+      const res = await fetch('/api/get-users')
+      if (res.ok) {
+        const authUsers = await res.json()
+        setUsers(prev => prev.map(u => {
+          const au = authUsers.find((a: any) => a.id === u.id)
+          return au ? { ...u, last_sign_in: au.last_sign_in_at } : u
+        }))
+      }
+    } catch {}
   }
   async function loadStatuses() {
     const { data } = await supabase.from('statuses').select('*').order('sort_order')
@@ -260,20 +271,27 @@ export default function AdminPage() {
               <button className="btn btn-primary" onClick={createUser} disabled={addingUser}>{addingUser ? 'מוסיף...' : '+ הוסף משתמש'}</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              {[['active','פעילים'],['inactive','לא פעילים'],['all','כולם']].map(([k,v]) => (
+              {[
+                ['active', `פעילים (${users.filter(u => u.active).length})`],
+                ['inactive', `לא פעילים (${users.filter(u => !u.active).length})`],
+                ['all', `כולם (${users.length})`]
+              ].map(([k,v]) => (
                 <button key={k} className={`btn btn-sm${userFilter===k?' btn-primary':''}`} onClick={() => setUserFilter(k)}>{v}</button>
               ))}
             </div>
             <div className="card" style={{ padding: 0 }}>
               <table>
-                <thead><tr><th>שם</th><th>תפקיד</th><th>סטטוס</th><th>פעולות</th></tr></thead>
+                <thead><tr><th>שם</th><th>תפקיד</th><th>סטטוס</th><th>כניסה אחרונה</th><th>פעולות</th></tr></thead>
                 <tbody>{filteredUsers.map(u => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 500 }}>{u.full_name}</td>
                     <td><span className={`badge ${u.role === 'admin' ? 'b-purple' : 'b-blue'}`}>{u.role === 'admin' ? 'מנהל' : 'נציג'}</span></td>
                     <td><span className={`badge ${u.active ? 'b-green' : 'b-gray'}`}>{u.active ? 'פעיל' : 'לא פעיל'}</span></td>
+                    <td style={{ fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
+                      {u.last_sign_in ? new Date(u.last_sign_in).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
+                    </td>
                     <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button className="btn btn-xs b-blue" style={{ background: 'var(--accent-lt)', color: 'var(--accent)', border: '1px solid rgba(37,99,235,0.2)' }} onClick={() => { setResetPassUser(u); setNewPass('') }}>איפוס סיסמא</button>
+                      <button className="btn btn-xs" style={{ background: 'var(--accent-lt)', color: 'var(--accent)', border: '1px solid rgba(37,99,235,0.2)' }} onClick={() => { setResetPassUser(u); setNewPass('') }}>איפוס סיסמא</button>
                       {u.id !== profile.id && u.active && <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}>השבת</button>}
                       {u.id !== profile.id && <button className="btn btn-xs" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }} onClick={() => hardDeleteUser(u.id)}>מחק</button>}
                     </td>
