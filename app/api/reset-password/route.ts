@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   try {
     const { userId, password } = await request.json()
     const supabaseAdmin = createClient(
-      'https://khucibpmwfpcobfvlibw.supabase.co',
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { autoRefreshToken: false, persistSession: false } }
     )
