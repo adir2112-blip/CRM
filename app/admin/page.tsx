@@ -15,6 +15,7 @@ export default function AdminPage() {
   const [newUserOrgs, setNewUserOrgs] = useState<string[]>([])
   const [addingUser, setAddingUser] = useState(false)
   const [userFilter, setUserFilter] = useState('active')
+  const [userOrgFilter, setUserOrgFilter] = useState('')
   const [statuses, setStatuses] = useState<any[]>([])
   const [newStatus, setNewStatus] = useState('')
   const [orgs, setOrgs] = useState<any[]>([])
@@ -256,9 +257,14 @@ export default function AdminPage() {
   if (loading) return null
   if (profile?.role !== 'admin') return <div style={{ padding: 40 }}>אין הרשאה</div>
 
-  const filteredUsers = users.filter(u =>
-    userFilter === 'all' ? true : userFilter === 'active' ? u.active : !u.active
-  )
+  const filteredUsers = users.filter(u => {
+    if (userFilter === 'active' && !u.active) return false
+    if (userFilter === 'inactive' && u.active) return false
+    if (userOrgFilter && u.role === 'agent') {
+      if (!u.allowed_orgs || !u.allowed_orgs.includes(userOrgFilter)) return false
+    }
+    return true
+  })
 
   return (
     <>
@@ -301,7 +307,7 @@ export default function AdminPage() {
               )}
               <button className="btn btn-primary" onClick={createUser} disabled={addingUser}>{addingUser ? 'מוסיף...' : '+ הוסף משתמש'}</button>
             </div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
               {[
                 ['active', `פעילים (${users.filter(u => u.active).length})`],
                 ['inactive', `לא פעילים (${users.filter(u => !u.active).length})`],
@@ -309,15 +315,31 @@ export default function AdminPage() {
               ].map(([k,v]) => (
                 <button key={k} className={`btn btn-sm${userFilter===k?' btn-primary':''}`} onClick={() => setUserFilter(k)}>{v}</button>
               ))}
+              <select className="form-input" value={userOrgFilter} onChange={e => setUserOrgFilter(e.target.value)} style={{ width: 180, fontSize: 12 }}>
+                <option value="">סנן לפי מחלקה</option>
+                {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
             </div>
             <div className="card" style={{ padding: 0 }}>
               <table>
-                <thead><tr><th>שם</th><th>תפקיד</th><th>סטטוס</th><th>כניסה אחרונה</th><th>פעולות</th></tr></thead>
+                <thead><tr><th>שם</th><th>תפקיד</th><th>סטטוס</th><th>מחלקות</th><th>כניסה אחרונה</th><th>פעולות</th></tr></thead>
                 <tbody>{filteredUsers.map(u => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: 500 }}>{u.full_name}</td>
                     <td><span className={`badge ${u.role === 'admin' ? 'b-purple' : 'b-blue'}`}>{u.role === 'admin' ? 'מנהל' : 'נציג'}</span></td>
                     <td><span className={`badge ${u.active ? 'b-green' : 'b-gray'}`}>{u.active ? 'פעיל' : 'לא פעיל'}</span></td>
+                    <td style={{ maxWidth: 200 }}>
+                      {u.role === 'agent' ? (
+                        u.allowed_orgs?.length > 0
+                          ? <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {u.allowed_orgs.map((id: string) => {
+                                const org = orgs.find(o => o.id === id)
+                                return org ? <span key={id} className="badge b-blue" style={{ fontSize: 10 }}>{org.name.split(' ')[0]}</span> : null
+                              })}
+                            </div>
+                          : <span style={{ fontSize: 11, color: 'var(--text3)' }}>כל המחלקות</span>
+                      ) : <span style={{ fontSize: 11, color: 'var(--text3)' }}>—</span>}
+                    </td>
                     <td style={{ fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>
                       {u.last_sign_in ? new Date(u.last_sign_in).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}
                     </td>

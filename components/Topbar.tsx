@@ -73,12 +73,19 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
   async function doSearch(q: string) {
     setSearchQ(q)
     if (!q.trim()) { setResults([]); setShowResults(false); return }
-    const { data } = await supabase
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs, role').eq('id', user?.id || '').single()
+    let query = supabase
       .from('cases')
-      .select('id, customer_name, phone, id_number, org_name, status_name, updated_at, agent_name')
+      .select('id, customer_name, phone, id_number, org_name, org_id, status_name, updated_at, agent_name')
       .or(`customer_name.ilike.%${q}%,phone.ilike.%${q}%,id_number.ilike.%${q}%`)
       .order('updated_at', { ascending: false })
       .limit(8)
+    // Filter by allowed orgs for agents
+    if (myProfile?.role === 'agent' && myProfile?.allowed_orgs?.length > 0) {
+      query = query.in('org_id', myProfile.allowed_orgs)
+    }
+    const { data } = await query
     setResults(data || [])
     setShowResults(true)
   }

@@ -48,7 +48,12 @@ export default function ReportsPage() {
   }, [profile])
 
   async function loadReport() {
+    // Get allowed orgs for agent
+    const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs, role').eq('id', profile.id).single()
+    const allowedOrgs = myProfile?.role === 'agent' && myProfile?.allowed_orgs?.length > 0 ? myProfile.allowed_orgs : null
+
     let q = supabase.from('cases').select('*').gte('created_at', from).lte('created_at', to + 'T23:59:59')
+    if (allowedOrgs) q = q.in('org_id', allowedOrgs)
     if (fOrg) q = q.eq('org_name', fOrg)
     if (fStatus) q = q.eq('status_name', fStatus)
     if (fCat1) q = q.eq('cat1_name', fCat1)
@@ -57,6 +62,13 @@ export default function ReportsPage() {
     if (fAgent) q = q.eq('agent_id', fAgent)
     const { data } = await q.order('created_at', { ascending: false })
     const d = data || []
+
+    // Also filter org dropdown by allowed orgs
+    if (allowedOrgs) {
+      const { data: allowedOrgData } = await supabase.from('organizations').select('*').in('id', allowedOrgs).order('name')
+      setOrgs(allowedOrgData || [])
+    }
+
     setCases(d)
     setCat1s(Array.from(new Set(d.map((c: any) => c.cat1_name).filter(Boolean))))
     setCat2s(Array.from(new Set(d.map((c: any) => c.cat2_name).filter(Boolean))))
