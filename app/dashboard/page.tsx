@@ -110,12 +110,14 @@ function DashboardPage() {
 
   const [showAddReminder, setShowAddReminder] = useState(false)
   const [newReminder, setNewReminder] = useState({ remind_at: '', note: '' })
-  const [caseTab, setCaseTab] = useState<'details'|'history'|'sms'>('details')
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'sms'|'files'>('details')
   const [history, setHistory] = useState<any[]>([])
   const [smsTemplates, setSmsTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [smsText, setSmsText] = useState('')
   const [showSmsPanel, setShowSmsPanel] = useState(false)
+  const [attachments, setAttachments] = useState<any[]>([])
+  const [uploading, setUploading] = useState(false)
 
   async function openCase(c: any) {
     setSelectedCase(c)
@@ -135,11 +137,53 @@ function DashboardPage() {
       const { data: hist } = await q.order('created_at', { ascending: false }).limit(20)
       setHistory(hist || [])
     }
+    // Load attachments
+    const { data: att } = await supabase.from('case_attachments').select('*').eq('case_id', c.id).order('created_at')
+    setAttachments(att || [])
     // Load SMS templates for this org
     if (c.org_id) {
       const { data: tmpl } = await supabase.from('sms_templates').select('*').eq('org_id', c.org_id).order('name')
       setSmsTemplates(tmpl || [])
     }
+  }
+
+  async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !selectedCase) return
+    setUploading(true)
+    const path = `${selectedCase.id}/${Date.now()}_${file.name}`
+    const { error } = await supabase.storage.from('case-attachments').upload(path, file)
+    if (!error) {
+      await supabase.from('case_attachments').insert({
+        case_id: selectedCase.id, uploaded_by: profile.id, uploader_name: profile.full_name,
+        file_name: file.name, file_size: file.size, file_type: file.type, storage_path: path
+      })
+      const { data } = await supabase.from('case_attachments').select('*').eq('case_id', selectedCase.id).order('created_at')
+      setAttachments(data || [])
+      showToast('קובץ הועלה ✓')
+    }
+    setUploading(false)
+    e.target.value = ''
+  }
+
+  async function downloadFile(att: any) {
+    const { data } = await supabase.storage.from('case-attachments').createSignedUrl(att.storage_path, 60)
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank')
+  }
+
+  async function deleteFile(att: any) {
+    if (!confirm('למחוק קובץ?')) return
+    await supabase.storage.from('case-attachments').remove([att.storage_path])
+    await supabase.from('case_attachments').delete().eq('id', att.id)
+    setAttachments(prev => prev.filter(a => a.id !== att.id))
+    showToast('קובץ נמחק ✓')
+  }
+
+  function formatBytes(bytes: number): string {
+    if (!bytes) return ''
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
   }
 
   async function deleteCase(id: number) {
@@ -478,13 +522,15 @@ function DashboardPage() {
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
             </div>
 
-            {/* Tabs */}
             <div className="tabs" style={{ marginBottom: 14 }}>
               <div className={`tab${caseTab==='details'?' active':''}`} onClick={() => setCaseTab('details')}>📋 פרטים ותיעוד</div>
               <div className={`tab${caseTab==='history'?' active':''}`} onClick={() => setCaseTab('history')}>
-                🕐 היסטוריית לקוח {history.length > 0 && <span className="badge b-blue" style={{ fontSize: 10, marginRight: 4 }}>{history.length}</span>}
+                🕐 היסטוריה {history.length > 0 && <span className="badge b-blue" style={{ fontSize: 10, marginRight: 4 }}>{history.length}</span>}
               </div>
-              <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 שליחת SMS</div>
+              <div className={`tab${caseTab==='files'?' active':''}`} onClick={() => setCaseTab('files')}>
+                📎 קבצים {attachments.length > 0 && <span className="badge b-gray" style={{ fontSize: 10, marginRight: 4 }}>{attachments.length}</span>}
+              </div>
+              <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 SMS</div>
             </div>
             {/* Details tab */}
             {caseTab === 'details' && <>
@@ -607,6 +653,46 @@ function DashboardPage() {
               </div>
             )}
 
+            {/* Files tab */}
+            {caseTab === 'files' && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>קבצים מצורפים ({attachments.length})</div>
+                  <label style={{ cursor: 'pointer' }}>
+                    <input type="file" style={{ display: 'none' }} onChange={uploadFile} accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.mp3,.mp4,.wav" />
+                    <span className="btn btn-primary btn-sm">{uploading ? 'מעלה...' : '+ העלה קובץ'}</span>
+                  </label>
+                </div>
+                {attachments.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>📎</div>
+                    <div style={{ fontSize: 13 }}>אין קבצים מצורפים</div>
+                    <div style={{ fontSize: 11, marginTop: 4 }}>ניתן לצרף תמונות, PDF, מסמכים, הקלטות</div>
+                  </div>
+                ) : (
+                  <div>
+                    {attachments.map(att => {
+                      const isImage = att.file_type?.startsWith('image/')
+                      const isAudio = att.file_type?.startsWith('audio/')
+                      const isPdf = att.file_type === 'application/pdf'
+                      const icon = isImage ? '🖼️' : isAudio ? '🎵' : isPdf ? '📄' : '📎'
+                      return (
+                        <div key={att.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', background: 'var(--bg3)', borderRadius: 8, marginBottom: 8, border: '1px solid var(--border)' }}>
+                          <span style={{ fontSize: 20 }}>{icon}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.file_name}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text3)' }}>{formatBytes(att.file_size)} · {att.uploader_name} · {new Date(att.created_at).toLocaleDateString('he-IL')}</div>
+                          </div>
+                          <button className="btn btn-xs btn-primary" onClick={() => downloadFile(att)}>הורד</button>
+                          <button className="btn btn-xs btn-danger" onClick={() => deleteFile(att)}>מחק</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* SMS tab */}
             {caseTab === 'sms' && (
               <div>
@@ -636,18 +722,40 @@ function DashboardPage() {
                   <textarea className="form-input" rows={4} value={smsText} onChange={e => setSmsText(e.target.value)} placeholder="הקלד את ההודעה..." />
                   <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{smsText.length} תווים</div>
                 </div>
-                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-                  onClick={() => {
-                    // SMS provider not connected yet — open WhatsApp as fallback
+                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 10 }}
+                  onClick={async () => {
                     const msg = encodeURIComponent(smsText)
                     const phone = selectedCase.phone.replace(/\D/g, '').replace(/^0/, '972')
                     window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
-                    showToast('נפתח WhatsApp ✓')
+                    // Auto-log the SMS
+                    const now = new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                    const logContent = `📱 SMS נשלח ב-${now}:\n${smsText}`
+                    await supabase.from('case_logs').insert({ case_id: selectedCase.id, author_id: profile.id, author_name: profile.full_name, content: logContent })
+                    await supabase.from('cases').update({ last_editor_id: profile.id, last_editor_name: profile.full_name }).eq('id', selectedCase.id)
+                    const { data } = await supabase.from('case_logs').select('*').eq('case_id', selectedCase.id).order('created_at')
+                    setLogs(data || [])
+                    showToast('נפתח WhatsApp + נרשם בתיעוד ✓')
                   }}>
-                  📱 שלח ב-WhatsApp (SMS בקרוב)
+                  📱 שלח ב-WhatsApp
                 </button>
-                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 8, textAlign: 'center' }}>
-                  * SMS ישלח אוטומטית לאחר חיבור ספק
+                {/* Customer reply button */}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '12px 14px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#15803d', marginBottom: 8 }}>📨 הלקוח הגיב?</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input className="form-input" id="reply-text" placeholder="תוכן תגובת הלקוח..." style={{ flex: 1, fontSize: 12 }} />
+                    <button className="btn btn-xs" style={{ background: '#16a34a', color: '#fff', border: 'none', whiteSpace: 'nowrap' }}
+                      onClick={async () => {
+                        const el = document.getElementById('reply-text') as HTMLInputElement
+                        if (!el?.value.trim()) return
+                        const now = new Date().toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        const logContent = `📨 תגובת לקוח ב-${now}:\n${el.value}`
+                        await supabase.from('case_logs').insert({ case_id: selectedCase.id, author_id: profile.id, author_name: profile.full_name, content: logContent })
+                        const { data } = await supabase.from('case_logs').select('*').eq('case_id', selectedCase.id).order('created_at')
+                        setLogs(data || [])
+                        el.value = ''
+                        showToast('תגובה נרשמה ✓')
+                      }}>רשום תגובה</button>
+                  </div>
                 </div>
               </div>
             )}

@@ -130,6 +130,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
         {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
         {isAdmin && <Link href="/agents-status" className={`nav-btn${pathname === '/agents-status' ? ' active' : ''}`}>👥 בטיפול נציגים</Link>}
         {isAdmin && <Link href="/reports" className={`nav-btn${pathname === '/reports' ? ' active' : ''}`}>📊 דוחות</Link>}
+        {isAdmin && <Link href="/analytics" className={`nav-btn${pathname === '/analytics' ? ' active' : ''}`}>📈 אנליטיקס</Link>}
         <Link href="/calendar" className={`nav-btn${pathname === '/calendar' ? ' active' : ''}`}>📅 יומן</Link>
         {isSuperAdmin && <Link href="/admin" className={`nav-btn${pathname.startsWith('/admin') ? ' active' : ''}`}>⚙ ניהול</Link>}
 
