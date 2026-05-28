@@ -12,6 +12,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState('users')
   const [users, setUsers] = useState<any[]>([])
   const [newUser, setNewUser] = useState({ email: '', password: '', full_name: '', role: 'agent' })
+  const [newUserOrgs, setNewUserOrgs] = useState<string[]>([])
   const [addingUser, setAddingUser] = useState(false)
   const [userFilter, setUserFilter] = useState('active')
   const [statuses, setStatuses] = useState<any[]>([])
@@ -122,12 +123,16 @@ export default function AdminPage() {
     const res = await fetch('/api/create-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser)
+      body: JSON.stringify({
+        ...newUser,
+        allowed_orgs: newUser.role === 'agent' && newUserOrgs.length > 0 ? newUserOrgs : null
+      })
     })
     const data = await res.json()
     if (data.error) { alert('שגיאה: ' + data.error); setAddingUser(false); return }
     setAddingUser(false)
     setNewUser({ email: '', password: '', full_name: '', role: 'agent' })
+    setNewUserOrgs([])
     showToast('משתמש נוסף ✓')
     loadUsers()
   }
@@ -268,6 +273,22 @@ export default function AdminPage() {
                 <div className="form-group"><label className="form-label">סיסמא</label><input className="form-input" type="password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="לפחות 6 תווים" /></div>
                 <div className="form-group"><label className="form-label">תפקיד</label><select className="form-input" value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}><option value="agent">נציג</option><option value="admin">מנהל</option></select></div>
               </div>
+              {newUser.role === 'agent' && (
+                <div className="form-group">
+                  <label className="form-label">מחלקות מורשות <span style={{ color:'var(--text3)', fontWeight:400 }}>(ריק = גישה לכל המחלקות)</span></label>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:8, padding:'10px 12px', background:'var(--bg3)', borderRadius:8, border:'1px solid var(--border)' }}>
+                    {orgs.map(o => (
+                      <label key={o.id} style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer', padding:'4px 10px', borderRadius:999, background: newUserOrgs.includes(o.id) ? '#dbeafe' : '#fff', border:`1px solid ${newUserOrgs.includes(o.id) ? '#93c5fd' : '#e5e7eb'}`, color: newUserOrgs.includes(o.id) ? '#1d4ed8' : '#374151' }}>
+                        <input type="checkbox" checked={newUserOrgs.includes(o.id)} onChange={e => {
+                          if (e.target.checked) setNewUserOrgs(prev => [...prev, o.id])
+                          else setNewUserOrgs(prev => prev.filter(id => id !== o.id))
+                        }} style={{ display:'none' }} />
+                        {newUserOrgs.includes(o.id) ? '✓ ' : ''}{o.name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <button className="btn btn-primary" onClick={createUser} disabled={addingUser}>{addingUser ? 'מוסיף...' : '+ הוסף משתמש'}</button>
             </div>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>

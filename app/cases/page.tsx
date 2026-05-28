@@ -26,6 +26,8 @@ export default function CasesPage() {
   const [smsTemplates, setSmsTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [smsText, setSmsText] = useState('')
+  const [fAgent, setFAgent] = useState('')
+  const [agentsList, setAgentsList] = useState<any[]>([])
   const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
@@ -40,6 +42,7 @@ export default function CasesPage() {
     loadCases()
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
     supabase.from('organizations').select('*').order('name').then(({ data }) => setOrgs(data || []))
+    supabase.from('profiles').select('id,full_name').eq('active', true).order('full_name').then(({ data }) => setAgentsList(data || []))
   }, [profile])
 
   useEffect(() => {
@@ -47,6 +50,7 @@ export default function CasesPage() {
     setFiltered(cases.filter(c => {
       if (fStatus && c.status_name !== fStatus) return false
       if (fOrg && c.org_name !== fOrg) return false
+      if (fAgent && c.agent_id !== fAgent) return false
       if (fFrom && c.created_at < fFrom) return false
       if (fTo && c.created_at > fTo + 'T23:59:59') return false
       if (q && !c.customer_name?.toLowerCase().includes(q) && !c.phone?.includes(q) && !c.id_number?.includes(q)) return false
@@ -134,13 +138,15 @@ export default function CasesPage() {
             <option value="">כל הארגונים</option>
             {orgs.map(o => <option key={o.id}>{o.name}</option>)}
           </select>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>תאריך:</span>
-            <input className="form-input" type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} style={{ width: 140 }} />
-            <span style={{ fontSize: 12, color: 'var(--text2)' }}>—</span>
-            <input className="form-input" type="date" value={fTo} onChange={e => setFTo(e.target.value)} style={{ width: 140 }} />
-            {(fFrom || fTo) && <button className="btn btn-xs" onClick={() => { setFFrom(''); setFTo('') }}>נקה תאריך</button>}
-          </div>
+          <select className="form-input" value={fAgent} onChange={e => setFAgent(e.target.value)} style={{ width: 160 }}>
+            <option value="">כל הנציגים</option>
+            {agentsList.map(a => <option key={a.id} value={a.id}>{a.full_name}</option>)}
+          </select>
+          <span style={{ fontSize: 12, color: 'var(--text2)', whiteSpace: 'nowrap' }}>תאריך:</span>
+          <input className="form-input" type="date" value={fFrom} onChange={e => setFFrom(e.target.value)} style={{ width: 140 }} />
+          <span style={{ fontSize: 12, color: 'var(--text2)' }}>—</span>
+          <input className="form-input" type="date" value={fTo} onChange={e => setFTo(e.target.value)} style={{ width: 140 }} />
+          {(fFrom || fTo) && <button className="btn btn-xs" onClick={() => { setFFrom(''); setFTo('') }}>נקה תאריך</button>}
           <span style={{ fontSize: 12, color: 'var(--text3)', marginRight: 'auto' }}>{filtered.length} פניות</span>
         </div>
 

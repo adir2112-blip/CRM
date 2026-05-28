@@ -34,7 +34,14 @@ export default function NewCasePage() {
   const [toast, setToast] = useState('')
 
   useEffect(() => {
-    supabase.from('organizations').select('*').eq('active', true).order('name').then(({ data }) => setOrgs(data || []))
+    async function loadOrgs() {
+      const { data: allOrgs } = await supabase.from('organizations').select('*').eq('active', true).order('name')
+      if (!profile) { setOrgs(allOrgs || []); return }
+      const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs').eq('id', profile.id).single()
+      const allowedOrgs = myProfile?.allowed_orgs
+      setOrgs(allowedOrgs?.length > 0 ? (allOrgs || []).filter((o: any) => allowedOrgs.includes(o.id)) : (allOrgs || []))
+    }
+    loadOrgs()
     supabase.from('statuses').select('*').eq('active', true).order('sort_order').then(({ data }) => {
       if (!data) return
       // Custom order: טופל first, then בטיפול נציג, then הועבר לשיחת מנהל, then rest
@@ -124,11 +131,11 @@ export default function NewCasePage() {
       agent_id: profile.id,
       agent_name: profile.full_name,
     }
-    const { error } = await supabase.from('cases').insert(insertData)
+    const { data: newCase, error } = await supabase.from('cases').insert(insertData).select().single()
     setSaving(false)
     if (error) { alert('שגיאה בשמירה: ' + error.message); return }
     setToast('פניה נשמרה ✓')
-    setTimeout(() => router.push('/dashboard'), 1000)
+    setTimeout(() => router.push('/dashboard?openCase=' + newCase.id), 800)
   }
 
   if (loading) return null
