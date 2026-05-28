@@ -19,6 +19,10 @@ export default function AgentsStatusPage() {
   const [statuses, setStatuses] = useState<any[]>([])
   const [toast, setToast] = useState('')
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
+  const [agentTab, setAgentTab] = useState<'details'|'sms'>('details')
+  const [agentSmsTemplates, setAgentSmsTemplates] = useState<any[]>([])
+  const [agentSelectedTemplate, setAgentSelectedTemplate] = useState('')
+  const [agentSmsText, setAgentSmsText] = useState('')
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -38,8 +42,15 @@ export default function AgentsStatusPage() {
   async function openCase(c: any) {
     setSelectedCase(c)
     setEditStatus(c.status_name)
+    setAgentTab('details')
+    setAgentSmsText('')
+    setAgentSelectedTemplate('')
     const { data } = await supabase.from('case_logs').select('*').eq('case_id', c.id).order('created_at')
     setLogs(data || [])
+    if (c.org_id) {
+      const { data: tmpl } = await supabase.from('sms_templates').select('*').eq('org_id', c.org_id).order('name')
+      setAgentSmsTemplates(tmpl || [])
+    }
   }
 
   async function saveStatus() {
@@ -158,6 +169,11 @@ export default function AgentsStatusPage() {
               <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
             </div>
+            <div className="tabs" style={{ marginBottom: 14 }}>
+              <div className={`tab${agentTab==='details'?' active':''}`} onClick={() => setAgentTab('details')}>📋 פרטים</div>
+              <div className={`tab${agentTab==='sms'?' active':''}`} onClick={() => setAgentTab('sms')}>💬 SMS</div>
+            </div>
+            {agentTab === 'details' && <>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[['שם לקוח', selectedCase.customer_name], ['ארגון', selectedCase.org_name], ['טלפון', selectedCase.phone], ['ת״ז', selectedCase.id_number], ['סיווג 1', selectedCase.cat1_name], ['סיווג 2', selectedCase.cat2_name], ['סיווג 3', selectedCase.cat3_name], ['נציג', selectedCase.agent_name]].map(([l, v]) => v ? (
                 <div key={l} style={{ background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 13px' }}>
@@ -173,14 +189,37 @@ export default function AgentsStatusPage() {
               </div>
             )}
             <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>סטטוס</div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <select className="form-input" value={editStatus} onChange={e => setEditStatus(e.target.value)} style={{ flex: 1 }}>
-                {statuses.map((s: any) => <option key={s.id}>{s.name}</option>)}
-              </select>
-              <button className="btn btn-primary btn-sm" onClick={saveStatus}>עדכן</button>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>סטטוס</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+              {statuses.map((s: any) => {
+                const cm: Record<string, any> = {
+                  'טופל':                  { bg: '#dcfce7', ab: '#16a34a', c: '#15803d', b: '#86efac' },
+                  'טופל לאחר שיחת מנהל': { bg: '#ccfbf1', ab: '#0f766e', c: '#0f766e', b: '#5eead4' },
+                  'בטיפול נציג':           { bg: '#dbeafe', ab: '#2563eb', c: '#1d4ed8', b: '#93c5fd' },
+                  'הועבר לשיחת מנהל':     { bg: '#ede9fe', ab: '#7c3aed', c: '#6d28d9', b: '#c4b5fd' },
+                  'בטיפול בשיחת מנהל':    { bg: '#fae8ff', ab: '#c026d3', c: '#a21caf', b: '#e879f9' },
+                  'אין מענה':              { bg: '#fef3c7', ab: '#d97706', c: '#b45309', b: '#fcd34d' },
+                }
+                const st = cm[s.name] || { bg: '#f3f4f6', ab: '#6b7280', c: '#374151', b: '#d1d5db' }
+                const sel = editStatus === s.name
+                return (
+                  <button key={s.id} onClick={() => setEditStatus(s.name)} style={{
+                    padding: '7px 16px', borderRadius: 8, fontSize: 12, fontWeight: sel ? 700 : 500,
+                    cursor: 'pointer', fontFamily: 'Heebo, sans-serif', transition: 'all 0.15s',
+                    background: sel ? st.ab : st.bg, color: sel ? '#fff' : st.c,
+                    border: `1.5px solid ${sel ? st.ab : st.b}`,
+                    boxShadow: sel ? `0 3px 10px ${st.ab}50` : '0 1px 2px rgba(0,0,0,0.05)', outline: 'none',
+                  }}>{s.name}</button>
+                )
+              })}
             </div>
-            <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
+            <button onClick={saveStatus} style={{
+              width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
+              background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#fff',
+              fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'Heebo, sans-serif',
+              marginBottom: 16, boxShadow: '0 4px 14px rgba(37,99,235,0.4)'
+            }}>✓ עדכן סטטוס</button>
+            <div style={{ height: 1, background: 'var(--border)', margin: '0 0 14px 0' }} />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>📝 תיעוד ידני</div>
             <div style={{ marginBottom: 12, maxHeight: 180, overflowY: 'auto' }}>
               {logs.length ? logs.map(l => (
@@ -194,6 +233,38 @@ export default function AgentsStatusPage() {
               <textarea className="form-input" rows={2} value={newLog} onChange={e => setNewLog(e.target.value)} placeholder="הוסף הערה..." style={{ flex: 1 }} />
               <button className="btn btn-success btn-sm" style={{ alignSelf: 'flex-start' }} onClick={addLog}>+ הוסף</button>
             </div>
+            </>}
+            {agentTab === 'sms' && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+                  📱 שליחה ל: <strong style={{ color: 'var(--text)', direction: 'ltr', display: 'inline-block' }}>{selectedCase.phone}</strong>
+                </div>
+                {agentSmsTemplates.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">בחר תבנית</label>
+                    <select className="form-input" value={agentSelectedTemplate} onChange={e => {
+                      setAgentSelectedTemplate(e.target.value)
+                      const tmpl = agentSmsTemplates.find((t: any) => t.id === e.target.value)
+                      if (tmpl) setAgentSmsText(tmpl.content.replace('{שם}', selectedCase.customer_name))
+                    }}>
+                      <option value="">בחר תבנית...</option>
+                      {agentSmsTemplates.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">תוכן ההודעה</label>
+                  <textarea className="form-input" rows={4} value={agentSmsText} onChange={e => setAgentSmsText(e.target.value)} placeholder="הקלד הודעה..." />
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{agentSmsText.length} תווים</div>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
+                  const msg = encodeURIComponent(agentSmsText)
+                  const phone = selectedCase.phone.replace(/\D/g, '').replace(/^0/, '972')
+                  window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
+                  showToast('נפתח WhatsApp ✓')
+                }}>📱 שלח ב-WhatsApp</button>
+              </div>
+            )}
           </div>
         </div>
       )}

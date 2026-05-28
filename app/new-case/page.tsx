@@ -35,7 +35,19 @@ export default function NewCasePage() {
 
   useEffect(() => {
     supabase.from('organizations').select('*').eq('active', true).order('name').then(({ data }) => setOrgs(data || []))
-    supabase.from('statuses').select('*').eq('active', true).order('sort_order').then(({ data }) => setStatuses(data || []))
+    supabase.from('statuses').select('*').eq('active', true).order('sort_order').then(({ data }) => {
+      if (!data) return
+      // Custom order: טופל first, then בטיפול נציג, then הועבר לשיחת מנהל, then rest
+      const ORDER = ['טופל', 'בטיפול נציג', 'הועבר לשיחת מנהל', 'בטיפול בשיחת מנהל', 'טופל לאחר שיחת מנהל', 'אין מענה']
+      const sorted = [...data].sort((a, b) => {
+        const ai = ORDER.indexOf(a.name); const bi = ORDER.indexOf(b.name)
+        if (ai === -1 && bi === -1) return 0
+        if (ai === -1) return 1
+        if (bi === -1) return -1
+        return ai - bi
+      })
+      setStatuses(sorted)
+    })
     supabase.from('suppliers').select('*').eq('active', true).order('name').then(({ data }) => setSuppliers(data || []))
     supabase.from('benefits').select('*').eq('active', true).order('name').then(({ data }) => setBenefits(data || []))
   }, [])

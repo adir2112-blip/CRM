@@ -22,6 +22,10 @@ export default function CasesPage() {
   const [newLog, setNewLog] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [toast, setToast] = useState('')
+  const [caseTab, setCaseTab] = useState<'details'|'sms'>('details')
+  const [smsTemplates, setSmsTemplates] = useState<any[]>([])
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [smsText, setSmsText] = useState('')
   const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
@@ -53,8 +57,15 @@ export default function CasesPage() {
   async function openCase(c: any) {
     setSelectedCase(c)
     setEditStatus(c.status_name)
+    setCaseTab('details')
+    setSmsText('')
+    setSelectedTemplate('')
     const { data } = await supabase.from('case_logs').select('*').eq('case_id', c.id).order('created_at')
     setLogs(data || [])
+    if (c.org_id) {
+      const { data: tmpl } = await supabase.from('sms_templates').select('*').eq('org_id', c.org_id).order('name')
+      setSmsTemplates(tmpl || [])
+    }
   }
 
   async function saveStatus() {
@@ -182,6 +193,11 @@ export default function CasesPage() {
               </div>
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
             </div>
+            <div className="tabs" style={{ marginBottom: 14 }}>
+              <div className={`tab${caseTab==='details'?' active':''}`} onClick={() => setCaseTab('details')}>📋 פרטים</div>
+              <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 SMS</div>
+            </div>
+            {caseTab === 'details' && <>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[['שם לקוח', selectedCase.customer_name], ['ארגון', selectedCase.org_name], ['טלפון', selectedCase.phone], ['ת״ז', selectedCase.id_number], ['סיווג 1', selectedCase.cat1_name], ['סיווג 2', selectedCase.cat2_name], ['סיווג 3', selectedCase.cat3_name], ['נציג', selectedCase.agent_name]].map(([l, v]) => v ? (
                 <div key={l} style={{ background: 'var(--bg3)', borderRadius: 'var(--radius-sm)', padding: '10px 13px' }}>
@@ -197,33 +213,37 @@ export default function CasesPage() {
               </div>
             )}
             <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 8 }}>סטטוס</div>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>סטטוס</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
               {statuses.map(s => {
-                const colorMap: Record<string, { bg: string, activeBg: string, color: string, border: string }> = {
-                  'טופל': { bg: '#f0fdf4', activeBg: '#16a34a', color: '#15803d', border: '#86efac' },
-                  'טופל לאחר שיחת מנהל': { bg: '#f0fdfa', activeBg: '#0d9488', color: '#0f766e', border: '#5eead4' },
-                  'בטיפול נציג': { bg: '#eff4ff', activeBg: '#2563eb', color: '#1d4ed8', border: '#bfdbfe' },
-                  'בטיפול בשיחת מנהל': { bg: '#f5f3ff', activeBg: '#7c3aed', color: '#6d28d9', border: '#ddd6fe' },
-                  'הועבר לשיחת מנהל': { bg: '#fdf4ff', activeBg: '#a855f7', color: '#9333ea', border: '#e9d5ff' },
-                  'אין מענה': { bg: '#fffbeb', activeBg: '#d97706', color: '#b45309', border: '#fde68a' },
+                const cm: Record<string, any> = {
+                  'טופל':                  { bg: '#dcfce7', ab: '#16a34a', c: '#15803d', b: '#86efac' },
+                  'טופל לאחר שיחת מנהל': { bg: '#ccfbf1', ab: '#0f766e', c: '#0f766e', b: '#5eead4' },
+                  'בטיפול נציג':           { bg: '#dbeafe', ab: '#2563eb', c: '#1d4ed8', b: '#93c5fd' },
+                  'הועבר לשיחת מנהל':     { bg: '#ede9fe', ab: '#7c3aed', c: '#6d28d9', b: '#c4b5fd' },
+                  'בטיפול בשיחת מנהל':    { bg: '#fae8ff', ab: '#c026d3', c: '#a21caf', b: '#e879f9' },
+                  'אין מענה':              { bg: '#fef3c7', ab: '#d97706', c: '#b45309', b: '#fcd34d' },
                 }
-                const style = colorMap[s.name] || { bg: '#f9fafb', activeBg: '#6b7280', color: '#374151', border: '#e5e7eb' }
-                const isSelected = editStatus === s.name
+                const st = cm[s.name] || { bg: '#f3f4f6', ab: '#6b7280', c: '#374151', b: '#d1d5db' }
+                const sel = editStatus === s.name
                 return (
                   <button key={s.id} onClick={() => setEditStatus(s.name)} style={{
-                    padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: isSelected ? 700 : 500,
+                    padding: '7px 16px', borderRadius: 8, fontSize: 12, fontWeight: sel ? 700 : 500,
                     cursor: 'pointer', fontFamily: 'Heebo, sans-serif', transition: 'all 0.15s',
-                    background: isSelected ? style.activeBg : style.bg,
-                    color: isSelected ? '#fff' : style.color,
-                    border: `1.5px solid ${isSelected ? style.activeBg : style.border}`,
-                    boxShadow: isSelected ? `0 2px 6px ${style.activeBg}40` : 'none', outline: 'none',
+                    background: sel ? st.ab : st.bg, color: sel ? '#fff' : st.c,
+                    border: `1.5px solid ${sel ? st.ab : st.b}`,
+                    boxShadow: sel ? `0 3px 10px ${st.ab}50` : '0 1px 2px rgba(0,0,0,0.05)', outline: 'none',
                   }}>{s.name}</button>
                 )
               })}
             </div>
-            <button className="btn btn-primary btn-sm" onClick={saveStatus} style={{ marginBottom: 14 }}>עדכן סטטוס</button>
-            <div style={{ height: 1, background: 'var(--border)', margin: '14px 0' }} />
+            <button onClick={saveStatus} style={{
+              width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
+              background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#fff',
+              fontSize: 15, fontWeight: 800, cursor: 'pointer', fontFamily: 'Heebo, sans-serif',
+              marginBottom: 16, boxShadow: '0 4px 14px rgba(37,99,235,0.4)', letterSpacing: '0.3px'
+            }}>✓ עדכן סטטוס</button>
+            <div style={{ height: 1, background: 'var(--border)', margin: '0 0 14px 0' }} />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', marginBottom: 10 }}>📝 תיעוד ידני</div>
             <div style={{ marginBottom: 12, maxHeight: 180, overflowY: 'auto' }}>
               {logs.length ? logs.map(l => (
@@ -237,6 +257,43 @@ export default function CasesPage() {
               <textarea className="form-input" rows={2} value={newLog} onChange={e => setNewLog(e.target.value)} placeholder="הוסף הערה..." style={{ flex: 1 }} />
               <button className="btn btn-success btn-sm" style={{ alignSelf: 'flex-start' }} onClick={addLog}>+ הוסף</button>
             </div>
+            </>}
+            {caseTab === 'sms' && (
+              <div>
+                <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+                  📱 שליחה ל: <strong style={{ color: 'var(--text)', direction: 'ltr', display: 'inline-block' }}>{selectedCase.phone}</strong>
+                </div>
+                {smsTemplates.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">בחר תבנית</label>
+                    <select className="form-input" value={selectedTemplate} onChange={e => {
+                      setSelectedTemplate(e.target.value)
+                      const tmpl = smsTemplates.find((t: any) => t.id === e.target.value)
+                      if (tmpl) setSmsText(tmpl.content.replace('{שם}', selectedCase.customer_name))
+                    }}>
+                      <option value="">בחר תבנית...</option>
+                      {smsTemplates.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {smsTemplates.length === 0 && (
+                  <div style={{ padding: '10px 14px', background: 'var(--amber-lt)', borderRadius: 8, fontSize: 12, color: 'var(--amber)', marginBottom: 12 }}>
+                    אין תבניות SMS לארגון זה.
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">תוכן ההודעה</label>
+                  <textarea className="form-input" rows={4} value={smsText} onChange={e => setSmsText(e.target.value)} placeholder="הקלד הודעה..." />
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>{smsText.length} תווים</div>
+                </div>
+                <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => {
+                  const msg = encodeURIComponent(smsText)
+                  const phone = selectedCase.phone.replace(/\D/g, '').replace(/^0/, '972')
+                  window.open(`https://wa.me/${phone}?text=${msg}`, '_blank')
+                  showToast('נפתח WhatsApp ✓')
+                }}>📱 שלח ב-WhatsApp</button>
+              </div>
+            )}
           </div>
         </div>
       )}

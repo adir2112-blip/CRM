@@ -57,6 +57,27 @@ function DashboardPage() {
   const [modalList, setModalList] = useState<any[]>([])
   const [showListModal, setShowListModal] = useState(false)
   const [chartOrgFilter, setChartOrgFilter] = useState('')
+  const [chartDateRange, setChartDateRange] = useState('all')
+
+  function relativeTime(dateStr: string): string {
+    const now = new Date()
+    const d = new Date(dateStr)
+    // Use Israel timezone offset
+    const nowDay = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
+    const dDay = new Date(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
+    const diffDays = Math.round((nowDay.getTime() - dDay.getTime()) / 864e5)
+    if (diffDays === 0) return 'היום'
+    if (diffDays === 1) return 'אתמול'
+    if (diffDays === 2) return 'שלשום'
+    if (diffDays < 7) return `לפני ${diffDays} ימים`
+    if (diffDays < 14) return 'שבוע שעבר'
+    if (diffDays < 21) return 'לפני שבועיים'
+    if (diffDays < 30) return 'לפני 3 שבועות'
+    if (diffDays < 60) return 'חודש שעבר'
+    if (diffDays < 90) return 'לפני חודשיים'
+    const months = Math.floor(diffDays / 30)
+    return `לפני ${months} חודשים`
+  }
   const [orgs, setOrgs] = useState<any[]>([])
   const [toast, setToast] = useState('')
 
@@ -341,7 +362,30 @@ function DashboardPage() {
 
         {/* CHARTS — admin only */}
         {isAdmin && (() => {
-          const filteredForChart = chartOrgFilter ? cases.filter(c => c.org_name === chartOrgFilter) : cases
+          const DATE_RANGES: Record<string, number> = {
+            all: 0, today: 0, yesterday: 1, week: 7, month: 30, '3m': 90, '6m': 180, year: 365
+          }
+          const DATE_LABELS: Record<string, string> = {
+            all: 'הכל', today: 'היום', yesterday: 'אתמול', week: 'שבוע אחרון',
+            month: 'חודש אחרון', '3m': '3 חודשים', '6m': 'חצי שנה', year: 'שנה אחרונה'
+          }
+          const now = new Date()
+          const filteredForChart = cases.filter(c => {
+            if (chartOrgFilter && c.org_name !== chartOrgFilter) return false
+            if (chartDateRange === 'all') return true
+            if (chartDateRange === 'today') {
+              const d = new Date(c.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+              return d === now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+            }
+            if (chartDateRange === 'yesterday') {
+              const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1)
+              const d = new Date(c.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+              return d === yesterday.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+            }
+            const days = DATE_RANGES[chartDateRange]
+            return new Date(c.created_at) >= new Date(now.getTime() - days * 864e5)
+          })
+
           const counts: Record<string, number> = {}
           filteredForChart.forEach(c => {
             if (!c.cat1_name || !c.cat2_name) return
@@ -358,20 +402,36 @@ function DashboardPage() {
             tableCounts[key].count++
           })
           const tableRows = Object.values(tableCounts).sort((a: any, b: any) => b.count - a.count).slice(0, 20)
+
+          const filterBar = (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+              <select className="form-input" value={chartOrgFilter} onChange={e => setChartOrgFilter(e.target.value)} style={{ width: 150, fontSize: 12, padding: '4px 8px' }}>
+                <option value="">כל הארגונים</option>
+                {orgs.map((o: any) => <option key={o.id}>{o.name}</option>)}
+              </select>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                {Object.entries(DATE_LABELS).map(([k, v]) => (
+                  <button key={k} onClick={() => setChartDateRange(k)} style={{
+                    padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                    fontFamily: 'Heebo, sans-serif', border: 'none',
+                    background: chartDateRange === k ? '#2563eb' : '#f1f3f8',
+                    color: chartDateRange === k ? '#fff' : '#4b5568',
+                    transition: 'all 0.15s'
+                  }}>{v}</button>
+                ))}
+              </div>
+            </div>
+          )
+
           return (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
               <div className="card card-pad">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700 }}>📊 פניות חוזרות לפי סיווג שני</div>
-                  <select className="form-input" value={chartOrgFilter} onChange={e => setChartOrgFilter(e.target.value)} style={{ width: 160, fontSize: 12, padding: '5px 8px' }}>
-                    <option value="">כל הארגונים</option>
-                    {orgs.map((o: any) => <option key={o.id}>{o.name}</option>)}
-                  </select>
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📊 פניות חוזרות — סיווג שני</div>
+                {filterBar}
                 {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={260}>
+                  <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
-                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value">
+                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} dataKey="value">
                         {chartData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                       </Pie>
                       <Tooltip formatter={(v: any, n: any) => [v + ' פניות', n]} />
@@ -381,8 +441,9 @@ function DashboardPage() {
                 ) : <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text3)' }}>אין נתונים</div>}
               </div>
               <div className="card card-pad">
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>📈 פניות חוזרות — טבלה מפורטת</div>
-                <div style={{ overflowY: 'auto', maxHeight: 280 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>📈 פניות חוזרות — טבלה מפורטת</div>
+                {filterBar}
+                <div style={{ overflowY: 'auto', maxHeight: 260 }}>
                   <table style={{ fontSize: 12 }}>
                     <thead><tr><th>ארגון</th><th>סיווג ראשון</th><th>סיווג שני</th><th style={{ textAlign: 'center' }}>כמות</th></tr></thead>
                     <tbody>
@@ -444,45 +505,43 @@ function DashboardPage() {
             <div className="divider" />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>סטטוס</div>
             {/* Styled status buttons */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
               {statuses.map(s => {
                 const colorMap: Record<string, { bg: string, activeBg: string, color: string, border: string }> = {
-                  'טופל':                   { bg: '#f0fdf4', activeBg: '#16a34a', color: '#15803d', border: '#86efac' },
-                  'טופל לאחר שיחת מנהל':  { bg: '#f0fdfa', activeBg: '#0d9488', color: '#0f766e', border: '#5eead4' },
-                  'בטיפול נציג':            { bg: '#eff4ff', activeBg: '#2563eb', color: '#1d4ed8', border: '#bfdbfe' },
-                  'בטיפול בשיחת מנהל':     { bg: '#f5f3ff', activeBg: '#7c3aed', color: '#6d28d9', border: '#ddd6fe' },
-                  'הועבר לשיחת מנהל':      { bg: '#fdf4ff', activeBg: '#a855f7', color: '#9333ea', border: '#e9d5ff' },
-                  'אין מענה':               { bg: '#fffbeb', activeBg: '#d97706', color: '#b45309', border: '#fde68a' },
+                  'טופל':                   { bg: '#dcfce7', activeBg: '#16a34a', color: '#15803d', border: '#86efac' },
+                  'טופל לאחר שיחת מנהל':  { bg: '#ccfbf1', activeBg: '#0f766e', color: '#0f766e', border: '#5eead4' },
+                  'בטיפול נציג':            { bg: '#dbeafe', activeBg: '#2563eb', color: '#1d4ed8', border: '#93c5fd' },
+                  'הועבר לשיחת מנהל':      { bg: '#ede9fe', activeBg: '#7c3aed', color: '#6d28d9', border: '#c4b5fd' },
+                  'בטיפול בשיחת מנהל':     { bg: '#fae8ff', activeBg: '#c026d3', color: '#a21caf', border: '#e879f9' },
+                  'אין מענה':               { bg: '#fef3c7', activeBg: '#d97706', color: '#b45309', border: '#fcd34d' },
                 }
-                const style = colorMap[s.name] || { bg: '#f9fafb', activeBg: '#6b7280', color: '#374151', border: '#e5e7eb' }
+                const style = colorMap[s.name] || { bg: '#f3f4f6', activeBg: '#6b7280', color: '#374151', border: '#d1d5db' }
                 const isSelected = editStatus === s.name
                 return (
-                  <button
-                    key={s.id}
-                    onClick={() => {
-                      setEditStatus(s.name)
-                      if (s.name === 'בטיפול נציג') setShowAddReminder(true)
-                      else setShowAddReminder(false)
-                    }}
-                    style={{
-                      padding: '6px 14px',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: isSelected ? 700 : 500,
-                      cursor: 'pointer',
-                      fontFamily: 'Heebo, sans-serif',
-                      transition: 'all 0.15s',
-                      background: isSelected ? style.activeBg : style.bg,
-                      color: isSelected ? '#fff' : style.color,
-                      border: `1.5px solid ${isSelected ? style.activeBg : style.border}`,
-                      boxShadow: isSelected ? `0 2px 6px ${style.activeBg}40` : 'none',
-                      outline: 'none',
-                    }}
-                  >{s.name}</button>
+                  <button key={s.id} onClick={() => {
+                    setEditStatus(s.name)
+                    if (s.name === 'בטיפול נציג') setShowAddReminder(true)
+                    else setShowAddReminder(false)
+                  }} style={{
+                    padding: '7px 16px', borderRadius: 8, fontSize: 12,
+                    fontWeight: isSelected ? 700 : 500, cursor: 'pointer',
+                    fontFamily: 'Heebo, sans-serif', transition: 'all 0.15s',
+                    background: isSelected ? style.activeBg : style.bg,
+                    color: isSelected ? '#fff' : style.color,
+                    border: `1.5px solid ${isSelected ? style.activeBg : style.border}`,
+                    boxShadow: isSelected ? `0 3px 10px ${style.activeBg}50` : '0 1px 2px rgba(0,0,0,0.05)',
+                    outline: 'none',
+                  }}>{s.name}</button>
                 )
               })}
             </div>
-            <button className="btn btn-primary btn-sm" onClick={saveStatus} style={{ marginBottom: 14 }}>עדכן סטטוס</button>
+            <button onClick={saveStatus} style={{
+              width: '100%', padding: '11px 0', borderRadius: 10, border: 'none',
+              background: 'linear-gradient(135deg, #1d4ed8, #2563eb)',
+              color: '#fff', fontSize: 15, fontWeight: 800, cursor: 'pointer',
+              fontFamily: 'Heebo, sans-serif', marginBottom: 16,
+              boxShadow: '0 4px 14px rgba(37,99,235,0.4)', letterSpacing: '0.3px'
+            }}>✓ עדכן סטטוס</button>
             <div className="divider" />
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '0.4px', marginBottom: 10 }}>📝 תיעוד ידני</div>
             <div style={{ marginBottom: 12, maxHeight: 160, overflowY: 'auto' }}>
@@ -540,7 +599,9 @@ function DashboardPage() {
                     <div style={{ fontSize: 11, color: 'var(--text2)' }}>
                       {h.cat1_name}{h.cat2_name ? ' › ' + h.cat2_name : ''} | נציג: {h.agent_name}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>{fmt(h.created_at)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
+                    {fmt(h.created_at)} · {relativeTime(h.created_at)}
+                  </div>
                   </div>
                 ))}
               </div>
