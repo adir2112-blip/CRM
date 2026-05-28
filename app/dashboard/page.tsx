@@ -215,7 +215,10 @@ function DashboardPage() {
     const file = e.target.files?.[0]
     if (!file || !selectedCase) return
     setUploading(true)
-    const path = `${selectedCase.id}/${Date.now()}_${file.name}`
+    // Sanitize filename - remove Hebrew and special chars
+    const ext = file.name.split('.').pop() || ''
+    const safeName = Date.now() + '_' + file.name.replace(/[^\x00-\x7F]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_') || 'file.' + ext
+    const path = `${selectedCase.id}/${safeName}`
     const { error } = await supabase.storage.from('case-attachments').upload(path, file)
     if (!error) {
       await supabase.from('case_attachments').insert({
