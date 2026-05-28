@@ -140,107 +140,172 @@ export default function NewCasePage() {
 
   if (loading) return null
 
+  const fieldStyle = {
+    width: '100%',
+    padding: '10px 14px',
+    borderRadius: 8,
+    border: '1.5px solid #e2e8f0',
+    fontSize: 13,
+    fontFamily: 'Heebo, sans-serif',
+    background: '#fff',
+    color: '#1e293b',
+    outline: 'none',
+    transition: 'border-color 0.15s, box-shadow 0.15s',
+  }
+
+  const labelStyle = {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#64748b',
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.5px',
+    marginBottom: 6,
+    display: 'block',
+  }
+
+  const sectionStyle = {
+    background: '#fff',
+    borderRadius: 12,
+    border: '1px solid #e2e8f0',
+    padding: '20px 24px',
+    marginBottom: 14,
+    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+  }
+
+  const sectionHeader = (icon: string, title: string, color: string) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, paddingBottom: 14, borderBottom: '1px solid #f1f5f9' }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: color + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15 }}>{icon}</div>
+      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>{title}</span>
+    </div>
+  )
+
   return (
     <>
       <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} userEmail={profile?.email || ''} />
-      <div style={{ padding: '22px 26px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <a href="/dashboard" className="btn btn-sm">← חזרה</a>
-          <div className="page-title">פניה חדשה</div>
+      <div style={{ padding: '22px 26px', maxWidth: 860, margin: '0 auto' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, background: '#f1f5f9', color: '#475569', fontSize: 13, fontWeight: 600, textDecoration: 'none', fontFamily: 'Heebo, sans-serif' }}>← חזרה</a>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: 0 }}>פניה חדשה</h1>
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>שדות עם * הם חובה</div>
+          </div>
         </div>
+
         <form onSubmit={handleSubmit}>
-          <div className="card card-pad">
+
+          {/* Section 1: Customer */}
+          <div style={sectionStyle}>
+            {sectionHeader('👤', 'פרטי לקוח', '#2563eb')}
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">שם לקוח מלא *</label>
-                <input className="form-input" value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="שם מלא" />
+                <label style={labelStyle}>שם לקוח מלא *</label>
+                <input style={fieldStyle} value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="שם מלא" onFocus={e => e.target.style.borderColor='#2563eb'} onBlur={e => e.target.style.borderColor='#e2e8f0'} />
               </div>
               <div className="form-group">
-                <label className="form-label">מספר טלפון *</label>
-                <input className="form-input" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="05X-XXXXXXX" />
+                <label style={labelStyle}>מספר טלפון *</label>
+                <input style={fieldStyle} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="05X-XXXXXXX" dir="ltr" onFocus={e => e.target.style.borderColor='#2563eb'} onBlur={e => e.target.style.borderColor='#e2e8f0'} />
               </div>
             </div>
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">תעודת זהות *</label>
-                <input className="form-input" value={form.id_number} onChange={e => setForm(f => ({ ...f, id_number: e.target.value }))} placeholder="9 ספרות" maxLength={9} />
+                <label style={labelStyle}>תעודת זהות *</label>
+                <input style={fieldStyle} value={form.id_number} onChange={e => setForm(f => ({ ...f, id_number: e.target.value }))} placeholder="9 ספרות" maxLength={9} onFocus={e => e.target.style.borderColor='#2563eb'} onBlur={e => e.target.style.borderColor='#e2e8f0'} />
               </div>
               <div className="form-group">
-                <label className="form-label">ארגון *</label>
-                <select className="form-input" value={form.org_id} onChange={e => handleOrgChange(e.target.value)}>
+                <label style={labelStyle}>ארגון / פעילות *</label>
+                <select style={fieldStyle} value={form.org_id} onChange={e => handleOrgChange(e.target.value)}>
                   <option value="">בחר ארגון</option>
                   {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                 </select>
               </div>
             </div>
+          </div>
+
+          {/* Section 2: Case details */}
+          <div style={sectionStyle}>
+            {sectionHeader('📋', 'פרטי הפניה', '#7c3aed')}
             <div className="form-row">
               <div className="form-group">
-                <label className="form-label">סטטוס *</label>
-                <select className="form-input" value={form.status_id} onChange={e => { const s = statuses.find(x => x.id === e.target.value); setForm(f => ({ ...f, status_id: e.target.value, status_name: s?.name || '' })) }}>
+                <label style={labelStyle}>סטטוס *</label>
+                <select style={fieldStyle} value={form.status_id} onChange={e => { const s = statuses.find(x => x.id === e.target.value); setForm(f => ({ ...f, status_id: e.target.value, status_name: s?.name || '' })) }}>
                   <option value="">בחר סטטוס</option>
                   {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">נושא הפניה *</label>
-                <input className="form-input" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="נושא קצר" />
+                <label style={labelStyle}>נושא הפניה *</label>
+                <input style={fieldStyle} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="נושא קצר ותמציתי" onFocus={e => e.target.style.borderColor='#7c3aed'} onBlur={e => e.target.style.borderColor='#e2e8f0'} />
               </div>
             </div>
+            <div className="form-group">
+              <label style={labelStyle}>תוכן הפניה *</label>
+              <textarea style={{ ...fieldStyle, resize: 'vertical' }} rows={4} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="תאר את הפניה בפירוט..." onFocus={e => (e.target as any).style.borderColor='#7c3aed'} onBlur={e => (e.target as any).style.borderColor='#e2e8f0'} />
+            </div>
+          </div>
+
+          {/* Section 3: Classifications */}
+          <div style={sectionStyle}>
+            {sectionHeader('🏷️', 'סיווגים', '#0d9488')}
             <div className="form-row-3">
               <div className="form-group">
-                <label className="form-label">סיווג ראשון *</label>
-                <select className="form-input" value={form.cat1_id} onChange={e => handleCat1Change(e.target.value)} disabled={!form.org_id}>
-                  <option value="">בחר</option>
+                <label style={labelStyle}>סיווג ראשון *</label>
+                <select style={{ ...fieldStyle, opacity: !form.org_id ? 0.5 : 1 }} value={form.cat1_id} onChange={e => handleCat1Change(e.target.value)} disabled={!form.org_id}>
+                  <option value="">{form.org_id ? 'בחר סיווג' : 'בחר ארגון קודם'}</option>
                   {cat1List.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">סיווג שני *</label>
-                <select className="form-input" value={form.cat2_id} onChange={e => handleCat2Change(e.target.value)} disabled={!form.cat1_id}>
-                  <option value="">בחר</option>
+                <label style={labelStyle}>סיווג שני *</label>
+                <select style={{ ...fieldStyle, opacity: !form.cat1_id ? 0.5 : 1 }} value={form.cat2_id} onChange={e => handleCat2Change(e.target.value)} disabled={!form.cat1_id}>
+                  <option value="">{form.cat1_id ? 'בחר סיווג' : 'בחר סיווג ראשון'}</option>
                   {cat2List.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">סיווג שלישי *</label>
-                <select className="form-input" value={form.cat3_id} onChange={e => handleCat3Change(e.target.value)} disabled={!form.cat2_id}>
-                  <option value="">בחר</option>
+                <label style={labelStyle}>סיווג שלישי *</label>
+                <select style={{ ...fieldStyle, opacity: !form.cat2_id ? 0.5 : 1 }} value={form.cat3_id} onChange={e => handleCat3Change(e.target.value)} disabled={!form.cat2_id}>
+                  <option value="">{form.cat2_id ? 'בחר סיווג' : 'בחר סיווג שני'}</option>
                   {cat3List.map(c => <option key={c.id} value={c.id}>{c.name}{c.opens_dynamic ? ' 📦' : ''}</option>)}
                 </select>
               </div>
             </div>
+
             {showDynamic && (
-              <>
-                <div className="dynamic-banner">📦 שדות נוספים — ספק והטבה</div>
+              <div style={{ marginTop: 16, padding: '14px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 16 }}>📦</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8' }}>שדות נוספים — ספק והטבה</span>
+                </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">שם ספק</label>
-                    <select className="form-input" value={form.supplier_id} onChange={e => { const s = suppliers.find(x => x.id === e.target.value); setForm(f => ({ ...f, supplier_id: e.target.value, supplier_name: s?.name || '' })) }}>
+                    <label style={{ ...labelStyle, color: '#1d4ed8' }}>שם ספק</label>
+                    <select style={fieldStyle} value={form.supplier_id} onChange={e => { const s = suppliers.find(x => x.id === e.target.value); setForm(f => ({ ...f, supplier_id: e.target.value, supplier_name: s?.name || '' })) }}>
                       <option value="">בחר ספק</option>
                       {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">שם הטבה</label>
-                    <select className="form-input" value={form.benefit_id} onChange={e => { const b = benefits.find(x => x.id === e.target.value); setForm(f => ({ ...f, benefit_id: e.target.value, benefit_name: b?.name || '' })) }}>
+                    <label style={{ ...labelStyle, color: '#1d4ed8' }}>שם הטבה</label>
+                    <select style={fieldStyle} value={form.benefit_id} onChange={e => { const b = benefits.find(x => x.id === e.target.value); setForm(f => ({ ...f, benefit_id: e.target.value, benefit_name: b?.name || '' })) }}>
                       <option value="">בחר הטבה</option>
                       {benefits.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
                   </div>
                 </div>
-              </>
+              </div>
             )}
-            <div className="form-group">
-              <label className="form-label">תוכן הפניה *</label>
-              <textarea className="form-input" rows={4} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="תאר את הפניה..." />
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-primary" type="submit" disabled={saving} style={{ padding: '9px 24px', fontSize: 14 }}>
-                💾 {saving ? 'שומר...' : 'שמור פניה'}
-              </button>
-              <a href="/dashboard" className="btn">ביטול</a>
-            </div>
           </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+            <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', padding: '11px 24px', borderRadius: 10, background: '#f1f5f9', color: '#475569', fontSize: 14, fontWeight: 600, textDecoration: 'none', fontFamily: 'Heebo, sans-serif', border: '1.5px solid #e2e8f0' }}>ביטול</a>
+            <button type="submit" disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 28px', borderRadius: 10, border: 'none', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#fff', fontSize: 14, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Heebo, sans-serif', boxShadow: saving ? 'none' : '0 4px 14px rgba(37,99,235,0.35)', transition: 'all 0.15s' }}>
+              {saving ? '⏳ שומר...' : '💾 שמור פניה'}
+            </button>
+          </div>
+
         </form>
       </div>
       {toast && <div className="toast">{toast}</div>}
