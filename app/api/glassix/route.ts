@@ -80,7 +80,8 @@ export async function GET(request: Request) {
 
     if (!listRes.ok) {
       const err = await listRes.text()
-      throw new Error('Glassix list error: ' + err)
+      const status = listRes.status
+      throw new Error(`Glassix list error ${status}: ${err}`)
     }
 
     const allTickets = await listRes.json()
