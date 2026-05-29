@@ -6,7 +6,11 @@ const API_KEY = process.env.GLASSIX_API_KEY!
 const API_SECRET = process.env.GLASSIX_API_SECRET!
 const USERNAME = process.env.GLASSIX_USERNAME!
 
+// Token cache
 let tokenCache: { token: string; expires: number } | null = null
+
+// Ticket list cache — 5 minutes
+let listCache: { tickets: any[]; expires: number } | null = null
 
 async function getToken(): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.expires - 300000) return tokenCache.token
@@ -27,8 +31,36 @@ function toGlassixDate(d: Date): string {
 }
 
 function normalizePhone(phone: string): string {
-  // Strip everything, remove leading 972 or 0 -> get local digits e.g. 504411096
   return phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '')
+}
+
+async function getTicketList(token: string): Promise<any[]> {
+  // Return cached if valid
+  if (listCache && Date.now() < listCache.expires) return listCache.tickets
+
+  const now = new Date()
+  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+  const since = toGlassixDate(startOfMonth)
+  const until = toGlassixDate(now)
+
+  const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
+  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+
+  if (res.status === 429) {
+    // Return cached even if expired — better than error
+    if (listCache) return listCache.tickets
+    throw new Error('Rate limit — נסה שוב בעוד דקה')
+  }
+
+  if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
+
+  const data = await res.json()
+  // Glassix returns tickets under empty string key ""
+  const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+
+  // Cache for 5 minutes
+  listCache = { tickets, expires: Date.now() + 5 * 60 * 1000 }
+  return tickets
 }
 
 export async function GET(request: Request) {
@@ -43,75 +75,59 @@ export async function GET(request: Request) {
     }
 
     const token = await getToken()
+    const allTickets = await getTicketList(token)
 
     const phoneNorm = phone ? normalizePhone(phone) : null
     const emailNorm = email ? email.toLowerCase() : null
 
-    // Date range — current month in UTC
-    const now = new Date()
-    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0))
-    const since = toGlassixDate(startOfMonth)
-    const until = toGlassixDate(now)
-
-    // Fetch all tickets for the month (participants ARE included per Glassix docs)
-    let allTickets: any[] = []
-    let nextUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
-    let pageCount = 0
-
-    while (nextUrl && pageCount < 5) {
-      // Retry up to 2 times on 429
-      let res: Response | null = null
-      for (let attempt = 0; attempt < 3; attempt++) {
-        res = await fetch(nextUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-        if (res.status === 429) {
-          await new Promise(r => setTimeout(r, 6000)) // wait 6 seconds
-          continue
-        }
-        break
-      }
-      if (!res || !res.ok) throw new Error(`Glassix list ${res?.status}: ${await res?.text()}`)
-      const data = await res.json()
-      const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
-      allTickets = allTickets.concat(tickets)
-      nextUrl = data.paging?.next || null
-      pageCount++
-    }
-
-    // Filter by participant identifier using normalized phone
     const matched = allTickets.filter((t: any) => {
       const parts: any[] = t.participants || []
       return parts.some((p: any) => {
-        if (p.type !== 'Client') return false
-        if (!p.identifier) return false
-        // Compare normalized phones
+        if (p.type !== 'Client' || !p.identifier) return false
         if (phoneNorm) {
           const pNorm = normalizePhone(p.identifier)
           if (pNorm === phoneNorm) return true
         }
         if (emailNorm && p.identifier.toLowerCase() === emailNorm) return true
-        if (idNumber && p.identifier === idNumber) return true
+        if (idNumber && normalizePhone(p.identifier) === normalizePhone(idNumber)) return true
         return false
       })
     })
 
-    // Format results — no extra API calls needed (no messages from list, that's ok)
     const formatted = matched.slice(0, 20).map((t: any) => {
       const clientPart = (t.participants || []).find((p: any) => p.type === 'Client')
       return {
         id: t.id,
         status: t.state,
         channel: t.primaryProtocolType || 'WhatsApp',
-        subject: t.field1 || t.subject || '',
+        subject: t.field1 || '',
         created: t.open,
         updated: t.lastActivity,
         assignee: t.owner?.fullName || t.owner?.UserName || '',
         clientName: clientPart?.name || '',
         clientIdentifier: clientPart?.identifier || '',
-        messages: [] // messages require separate call — skipped to avoid rate limit
+        messages: []
       }
     })
 
-    return NextResponse.json({ total: matched.length, tickets: formatted })
+    return NextResponse.json({ 
+      total: matched.length, 
+      tickets: formatted,
+      debug: {
+        totalInMonth: allTickets.length,
+        searchPhone: phoneNorm,
+        searchEmail: emailNorm,
+        searchId: idNumber,
+        sampleParticipants: allTickets.slice(0, 5).map((t: any) => ({
+          ticketId: t.id,
+          participants: (t.participants || []).map((p: any) => ({
+            type: p.type,
+            identifier: p.identifier,
+            normalized: normalizePhone(p.identifier || '')
+          }))
+        }))
+      }
+    })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
