@@ -46,10 +46,11 @@ export async function GET(request: Request) {
     // Search by identifier — try all provided
     const identifiers: string[] = []
     if (phone) {
-      // Normalize phone to international format
-      const normalized = phone.replace(/\D/g, '').replace(/^0/, '972')
-      identifiers.push(normalized)
-      identifiers.push(phone.replace(/\D/g, ''))
+      const digits = phone.replace(/\D/g, '')
+      // Convert Israeli format: 05X -> 9725X
+      const international = digits.startsWith('0') ? '972' + digits.slice(1) : digits.startsWith('972') ? digits : '972' + digits
+      identifiers.push(international)
+      identifiers.push(digits) // also try original
     }
     if (email) identifiers.push(email)
     if (idNumber) identifiers.push(idNumber)
@@ -57,8 +58,16 @@ export async function GET(request: Request) {
     // Fetch recent tickets list first
     const now = new Date()
     const sixMonthsAgo = new Date(now.getTime() - 180 * 864e5)
-    const since = sixMonthsAgo.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).split('/').join('/') + ' 00:00:00:00'
-    const until = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).split('/').join('/') + ' 23:59:59:00'
+    
+    function toGlassixDate(d: Date): string {
+      const day = String(d.getDate()).padStart(2, '0')
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const year = d.getFullYear()
+      return `${month}/${day}/${year} 00:00:00:00`
+    }
+
+    const since = toGlassixDate(sixMonthsAgo)
+    const until = toGlassixDate(now).replace('00:00:00:00', '23:59:59:00')
 
     const listRes = await fetch(`${BASE_URL}/api/v1.2/tickets/list`, {
       method: 'POST',
