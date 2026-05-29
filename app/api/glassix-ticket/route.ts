@@ -70,31 +70,43 @@ export async function GET(request: Request) {
         return text.trim().length > 0 && !isJsonBlob(text.trim())
       })
       .map((tx: any) => {
-        // Determine sender type
+        const text = tx.text || tx.body || tx.content || ''
         const sType = tx.senderType || ''
         const userId = tx.userId || tx.senderId || ''
         
         let type: 'Client' | 'Agent' = 'Client'
         let sender = clientName
         
-        if (sType === 'User' || sType === 'Agent' || agentUserIds.has(userId)) {
+        if (sType === 'Agent' || sType === 'User' || agentUserIds.has(userId)) {
           type = 'Agent'
-          // Find agent name by userId
           const agentPart = agentParts.find((p: any) => p.identifier === userId)
           sender = agentPart?.displayName || agentPart?.name || agentName
         } else if (botUserIds.has(userId)) {
-          type = 'Agent' // Bot treated as agent side
+          type = 'Agent'
           sender = 'בוט'
         } else if (sType === 'Client' || sType === 'client') {
           type = 'Client'
           sender = clientName
+        } else if (tx.senderName && tx.senderName !== clientName) {
+          // If senderName is different from client name — it's agent or bot
+          type = 'Agent'
+          sender = tx.senderName
         }
+
+        // Format time
+        const rawTime = tx.time || tx.createTime || tx.timestamp
+        const timeStr = rawTime ? new Date(rawTime).toLocaleTimeString('he-IL', { 
+          timeZone: 'Asia/Jerusalem', 
+          hour: '2-digit', 
+          minute: '2-digit' 
+        }) : ''
 
         return {
           id: tx.id,
-          text: tx.text || tx.body || tx.content || '',
+          text,
           sender,
-          time: tx.time || tx.createTime || tx.timestamp,
+          time: timeStr,
+          rawTime,
           type,
         }
       })

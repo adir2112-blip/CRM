@@ -135,7 +135,7 @@ function GlassixTicket({ ticket: t }: { ticket: any }) {
             return (
               <div key={m.id} style={{ display:'flex', flexDirection:'column', alignItems: isClient ? 'flex-start' : 'flex-end' }}>
                 <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2, padding:'0 4px' }}>
-                  {isClient ? '👤 לקוח' : '👨‍💼 נציג'} · {m.sender} · {m.time ? new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}) : ''}
+                  {isClient ? '👤' : '👨‍💼'} {m.sender}{m.time ? ` · ${m.time}` : ''}
                 </div>
                 <div style={{
                   maxWidth:'82%', padding:'8px 12px',
