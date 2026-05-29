@@ -160,6 +160,7 @@ function DashboardPage() {
   // Modal states
   const [selectedCase, setSelectedCase] = useState<any>(null)
   const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'glassix'>('details')
+  const [glassixBadge, setGlassixBadge] = useState<'loading'|'found'|'not_found'|''>('')
   const [glassixTickets, setGlassixTickets] = useState<any[]>([])
   const [glassixLoading, setGlassixLoading] = useState(false)
   const [glassixError, setGlassixError] = useState('')
@@ -224,6 +225,15 @@ function DashboardPage() {
     setGlassixTickets([])
     setGlassixError('')
     setGlassixTotal(0)
+    setGlassixBadge('loading')
+    // Auto-check Glassix in background
+    const params = new URLSearchParams()
+    if (c.phone) params.set('phone', c.phone)
+    if (c.id_number) params.set('id_number', c.id_number)
+    fetch(`/api/glassix?${params.toString()}`).then(r => r.json()).then(data => {
+      if (data.total > 0) { setGlassixTotal(data.total); setGlassixTickets(data.tickets || []); setGlassixBadge('found') }
+      else setGlassixBadge('not_found')
+    }).catch(() => setGlassixBadge('not_found'))
     if (c.phone) {
       const { data: hist } = await supabase.from('cases').select('id,created_at,status_name,cat1_name,cat2_name,agent_name,org_name').neq('id', c.id).eq('phone', c.phone).order('created_at', { ascending: false }).limit(20)
       setHistory(hist || [])
@@ -567,6 +577,9 @@ function DashboardPage() {
             <div className="modal-header">
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
                 <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
+                {glassixBadge === 'loading' && <span style={{ fontSize:11, background:'#f1f5f9', color:'#64748b', padding:'2px 8px', borderRadius:999 }}>🟦 בודק Glassix...</span>}
+                {glassixBadge === 'found' && <span style={{ fontSize:11, background:'#dbeafe', color:'#1d4ed8', padding:'3px 10px', borderRadius:999, fontWeight:700, cursor:'pointer' }} onClick={() => setCaseTab('glassix')}>🟦 {glassixTotal} שיחות ב-Glassix ←</span>}
+                {glassixBadge === 'not_found' && <span style={{ fontSize:11, background:'#f1f5f9', color:'#94a3b8', padding:'2px 8px', borderRadius:999 }}>🟦 אין שיחות ב-Glassix</span>}
                 {isSuperAdmin && <button className="btn btn-xs btn-danger" onClick={() => deleteCase(selectedCase.id)}>🗑 מחק</button>}
               </div>
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
