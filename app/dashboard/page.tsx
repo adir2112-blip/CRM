@@ -581,18 +581,6 @@ function DashboardPage() {
             <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>לא נמצא לקוח עם פרטים אלו</div>
           )}
         </div>
-        <div className="card card-pad" style={{ marginBottom:16 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-            <div style={{ fontSize:13, fontWeight:700 }}>⏳ בטיפול נציג</div>
-            <div style={{ display:'flex', gap:4 }}>
-              {Object.entries(RANGE_LABELS).map(([k,v]) => (
-                <button key={k} onClick={() => setIpFilter(k)} style={{ padding:'3px 10px', borderRadius:999, fontSize:11, fontWeight:600, cursor:'pointer', fontFamily:'Heebo,sans-serif', border:'none', background:ipFilter===k?'#2563eb':'#f1f3f8', color:ipFilter===k?'#fff':'#4b5568' }}>{v}</button>
-              ))}
-            </div>
-          </div>
-          {filteredIP.length ? filteredIP.map(c => <CaseCard key={c.id} c={c} onClick={() => openCase(c)} />) : <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>אין פניות בטווח הנבחר</div>}
-        </div>
-
         {/* Admin panels */}
         {isAdmin && (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:16 }}>
