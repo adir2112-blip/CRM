@@ -21,107 +21,143 @@ async function getToken(): Promise<string> {
   return tokenCache.token
 }
 
+function isJsonBlob(text: string): boolean {
+  const t = text.trim()
+  return (t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('id')
+    const debug = searchParams.get('debug') === 'true'
     if (!ticketId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
     const token = await getToken()
 
-    // Use Get endpoint with transactions
-    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
+    // Get ticket for participants
+    const ticketRes = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
 
-    if (!res.ok) {
-      return NextResponse.json({ messages: [], debug: { status: res.status, error: await res.text() } })
+    let clientName = ''
+    let agentName = ''
+    let botId = ''
+
+    if (ticketRes.ok) {
+      const ticket = await ticketRes.json()
+      const parts = ticket.participants || []
+      const client = parts.find((p: any) => p.type === 'Client')
+      const bot = parts.find((p: any) => p.userName?.includes('@glassix.bot') || p.name === 'בוט')
+      const agent = parts.find((p: any) => p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט')
+      
+      clientName = client?.name || ''
+      agentName = agent?.displayName || agent?.name || ''
+      botId = bot?.identifier || ''
     }
 
-    const ticket = await res.json()
+    // Get HTML
+    const htmlRes = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}/html`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
 
-    // transactions is null in get — use get with transactions param
-    if (!ticket.transactions || ticket.transactions === null) {
-      // Try with includeTransactions
-      const res2 = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}?includeTransactions=true`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (res2.ok) {
-        const t2 = await res2.json()
-        if (t2.transactions?.length > 0) {
-          return formatTransactions(t2)
-        }
-      }
-
-      // Fallback: use HTML endpoint and parse it
-      const htmlRes = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}/html`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (htmlRes.ok) {
-        const html = await htmlRes.text()
-        const messages = parseGlassixHtml(html)
-        return NextResponse.json({ messages, subject: ticket.field1 || '', status: ticket.state || '' })
-      }
-
-      return NextResponse.json({ messages: [], debug: { note: 'transactions null, html failed' } })
+    if (!htmlRes.ok) {
+      return NextResponse.json({ messages: [] })
     }
 
-    return formatTransactions(ticket)
+    const html = await htmlRes.text()
+
+    // Return raw HTML snippet for debugging
+    if (debug) {
+      return NextResponse.json({ 
+        htmlSnippet: html.slice(0, 3000),
+        clientName,
+        agentName
+      })
+    }
+
+    // Parse messages from HTML
+    const messages = parseMessages(html, clientName, agentName)
+    return NextResponse.json({ messages, clientName, agentName })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
 
-function formatTransactions(ticket: any) {
-  const transactions = ticket.transactions || []
-  const messages = transactions
-    .filter((tx: any) => (tx.text || tx.body || tx.content || '').trim().length > 0)
-    .map((tx: any) => {
-      const senderType = tx.senderType || tx.type || ''
-      const isClient = senderType === 'Client' || senderType === 'client' || tx.direction === 'Incoming'
-      return {
-        id: tx.id,
-        text: tx.text || tx.body || tx.content || '',
-        sender: tx.senderName || tx.userName || '',
-        time: tx.time || tx.createTime,
-        type: isClient ? 'Client' : 'Agent',
-      }
-    })
-  return NextResponse.json({ messages, subject: ticket.field1 || '', status: ticket.state || '' })
-}
-
-function parseGlassixHtml(html: string): any[] {
+function parseMessages(html: string, clientName: string, agentName: string): any[] {
   const messages: any[] = []
-  
-  // Extract message blocks from HTML
-  // Look for patterns like sender name + message text
-  const lines = html
+
+  // Extract all transactions from HTML
+  // The transactions from previous response had these patterns:
+  // - Customer messages: messages from the client
+  // - Agent messages: responses from human agent
+  // - Bot/system: menus, JSON blobs
+
+  // Get plain text version
+  const plain = html
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/td>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&gt;/g, '>')
     .replace(/&lt;/g, '<')
     .replace(/&amp;/g, '&')
     .replace(/&nbsp;/g, ' ')
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 0)
+    .replace(/\r/g, '')
 
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (line.length > 0 && line.length < 200) {
-      messages.push({
-        id: i,
-        text: line,
-        sender: '',
-        time: null,
-        type: 'Client', // default, will be improved
-      })
-    }
-    i++
+  const lines = plain.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.length > 1 && !isJsonBlob(l))
+
+  // Known bot/system phrases to skip
+  const skipPhrases = [
+    'ברוכים הבאים', 'במה נוכל לעזור', 'אנא הזינו',
+    'חזרה לתפריט', 'מעבר לנציג', 'Closed', 'Open',
+    'Incoming', 'Outgoing', 'Read', 'Delivered'
+  ]
+
+  // Agent phrases (greetings, standard responses)
+  const agentPhrases = [
+    'שמי', 'ואני אטפל', 'איך אוכל לעזור', 'לוקח לזה',
+    'ימי עסקים', 'בשמחה', 'לצערי', 'מדיניות'
+  ]
+
+  // Client phrases  
+  const clientPhrases = [
+    'שלום וברכה', 'ביקשתי', 'עשיתי', 'לא מראה',
+    'אוקי תודה', 'למה כל כך', 'הרבה', 'אוקי.\nתודה'
+  ]
+
+  let id = 0
+  const seen = new Set<string>()
+
+  for (const line of lines) {
+    if (line.length < 2) continue
+    if (skipPhrases.some(p => line.startsWith(p))) continue
+    if (seen.has(line)) continue
+    seen.add(line)
+
+    const isAgent = agentPhrases.some(p => line.includes(p)) || 
+                    (agentName && line.includes(agentName))
+    const isClient = clientPhrases.some(p => line.includes(p)) ||
+                     (clientName && line.includes(clientName))
+
+    // Menu selections (short, 2-10 chars) are client choices
+    const isMenuSelection = line.length <= 15 && !line.includes('\n')
+
+    let msgType: 'Client' | 'Agent' = 'Client'
+    if (isAgent) msgType = 'Agent'
+
+    messages.push({
+      id: id++,
+      text: line,
+      sender: msgType === 'Agent' ? (agentName || 'נציג') : (clientName || 'לקוח'),
+      time: null,
+      type: msgType
+    })
   }
-  
-  return messages.slice(0, 50)
+
+  return messages
 }
