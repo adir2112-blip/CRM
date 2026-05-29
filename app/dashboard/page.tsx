@@ -376,6 +376,23 @@ function DashboardPage() {
   if (loading) return null
   if (!profile) return null
 
+  // Recurring complaints — customers who opened 2+ cases in last 7 days
+  const recurringCustomers = (() => {
+    const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 864e5)
+    const recentCases = cases.filter(c => new Date(c.created_at) >= sevenDaysAgo)
+    const phoneCounts: Record<string, any[]> = {}
+    recentCases.forEach(c => {
+      if (!c.phone) return
+      if (!phoneCounts[c.phone]) phoneCounts[c.phone] = []
+      phoneCounts[c.phone].push(c)
+    })
+    return Object.entries(phoneCounts)
+      .filter(([_, cs]) => cs.length >= 2)
+      .map(([phone, cs]) => ({ phone, cases: cs, count: cs.length, name: cs[0].customer_name }))
+      .sort((a, b) => b.count - a.count)
+  })()
+
   const myCases = cases.filter(c => c.agent_id === profile.id)
   const todayCases = myCases.filter(c => {
     const d = c.created_at > c.updated_at ? c.created_at : c.updated_at
@@ -461,7 +478,7 @@ function DashboardPage() {
 
         {/* Admin panels */}
         {isAdmin && (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:16 }}>
             <div className="card">
               <div className="card-header">
                 <div className="card-title" style={{ color:'var(--red)' }}>🔴 חריגת ימי עסקים</div>
@@ -478,13 +495,36 @@ function DashboardPage() {
             <div className="card">
               <div className="card-header">
                 <div className="card-title" style={{ color:'var(--purple)' }}>🟣 ממתין/בטיפול מנהל</div>
-                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                  <span className="badge b-purple">{mgrWait.length + mgrActive.length}</span>
-                </div>
+                <span className="badge b-purple">{mgrWait.length + mgrActive.length}</span>
               </div>
               <div style={{ padding:'8px 14px', fontSize:11, color:'var(--text3)', borderBottom:'1px solid var(--border)' }}>הועבר/בטיפול שיחת מנהל מעל 2 ימי עסקים</div>
               <div style={{ padding:'10px 14px', maxHeight:280, overflowY:'auto' }}>
                 <MiniList cases={[...mgrWait,...mgrActive]} empty="אין חריגות" onClick={openCase} />
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title" style={{ color:'#dc2626' }}>🔁 תלונות חוזרות</div>
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                  <span className="badge b-red">{recurringCustomers.length}</span>
+                  <span style={{ fontSize:10, color:'var(--text3)' }}>7 ימים אחרונים</span>
+                </div>
+              </div>
+              <div style={{ padding:'8px 14px', fontSize:11, color:'var(--text3)', borderBottom:'1px solid var(--border)' }}>לקוח שפנה 2+ פעמים בשבוע האחרון</div>
+              <div style={{ padding:'10px 14px', maxHeight:280, overflowY:'auto' }}>
+                {recurringCustomers.length === 0
+                  ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>אין תלונות חוזרות</div>
+                  : recurringCustomers.map(r => (
+                    <div key={r.phone} onClick={() => showList(`🔁 ${r.name} (${r.count} פניות)`, r.cases)}
+                      style={{ padding:'10px 14px', cursor:'pointer', borderRadius:8, background:'#fff5f5', border:'1px solid #fca5a5', marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                      <div>
+                        <div style={{ fontWeight:600, fontSize:13, color:'#dc2626' }}>{r.name}</div>
+                        <div style={{ fontSize:11, color:'#9ca3af', marginTop:2 }}>{r.phone}</div>
+                      </div>
+                      <span style={{ background:'#dc2626', color:'#fff', borderRadius:999, padding:'3px 10px', fontSize:12, fontWeight:700 }}>{r.count} פניות</span>
+                    </div>
+                  ))
+                }
               </div>
             </div>
           </div>
