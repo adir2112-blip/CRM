@@ -128,16 +128,28 @@ function GlassixTicket({ ticket: t }: { ticket: any }) {
       {t.subject && <div style={{ fontSize:12, fontWeight:500, color:'#374151', marginTop:5 }}>{t.subject}</div>}
       {t.clientIdentifier && <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>📞 {t.clientIdentifier}</div>}
       {expanded && (
-        <div style={{ borderTop:'1px solid var(--border)', paddingTop:10, marginTop:10, maxHeight:300, overflowY:'auto' }}>
+        <div style={{ borderTop:'1px solid var(--border)', paddingTop:10, marginTop:10, maxHeight:400, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
           {msgs.length === 0 ? <div style={{ fontSize:11, color:'var(--text3)', textAlign:'center' }}>אין הודעות</div>
-          : msgs.map((m: any) => (
-            <div key={m.id} style={{ marginBottom:8, display:'flex', justifyContent: m.type==='Client'?'flex-start':'flex-end' }}>
-              <div style={{ maxWidth:'80%', padding:'7px 10px', borderRadius:8, background: m.type==='Client'?'#f1f5f9':'#eff4ff', fontSize:12 }}>
-                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>{m.sender} · {m.time?new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}):''}</div>
-                {m.text}
+          : msgs.map((m: any) => {
+            const isClient = m.type === 'Client'
+            return (
+              <div key={m.id} style={{ display:'flex', flexDirection:'column', alignItems: isClient ? 'flex-start' : 'flex-end' }}>
+                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2, padding:'0 4px' }}>
+                  {isClient ? '👤 לקוח' : '👨‍💼 נציג'} · {m.sender} · {m.time ? new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}) : ''}
+                </div>
+                <div style={{
+                  maxWidth:'82%', padding:'8px 12px',
+                  borderRadius: isClient ? '4px 12px 12px 12px' : '12px 4px 12px 12px',
+                  background: isClient ? '#dbeafe' : '#dcfce7',
+                  color: isClient ? '#1e3a8a' : '#14532d',
+                  fontSize:12, lineHeight:1.6,
+                  border:`1px solid ${isClient ? '#93c5fd' : '#86efac'}`
+                }}>
+                  {m.text}
+                </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

@@ -63,8 +63,16 @@ async function getTicketsWithCache(): Promise<any[]> {
     const data = await res.json()
     const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
     allTickets = allTickets.concat(tickets)
-    const next = data.paging?.next || null
-    currentUrl = next ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+    
+    // Debug pagination
+    console.log(`Glassix page: ${tickets.length} tickets, total so far: ${allTickets.length}, paging:`, JSON.stringify(data.paging))
+    
+    const next = data.paging?.next || data.paging?.nextPageToken || null
+    if (next && typeof next === 'string') {
+      currentUrl = next.startsWith('http') ? next : `${BASE_URL}${next.startsWith('/') ? '' : '/api/v1.2/'}${next}`
+    } else {
+      currentUrl = null
+    }
     if (allTickets.length >= 1000) break
   }
 
