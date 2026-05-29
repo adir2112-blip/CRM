@@ -35,15 +35,15 @@ function normalizePhone(phone: string): string {
 }
 
 async function getTicketList(token: string): Promise<any[]> {
-  // Return cached if valid
-  if (listCache && Date.now() < listCache.expires) return listCache.tickets
+  // Clear cache to force fresh fetch
+  listCache = null
 
   const now = new Date()
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const since = toGlassixDate(startOfMonth)
   const until = toGlassixDate(now)
 
-  const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
+  const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
   const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
 
   if (res.status === 429) {
