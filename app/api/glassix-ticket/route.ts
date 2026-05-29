@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 const WORKSPACE = process.env.GLASSIX_WORKSPACE || 'm4l-il'
 const BASE_URL = `https://${WORKSPACE}.glassix.com`
 const API_KEY = process.env.GLASSIX_API_KEY!
 const API_SECRET = process.env.GLASSIX_API_SECRET!
 const USERNAME = process.env.GLASSIX_USERNAME!
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
 let tokenCache: { token: string; expires: number } | null = null
 
@@ -26,102 +32,87 @@ function isJsonBlob(text: string): boolean {
   return (t.startsWith('{') && t.endsWith('}')) || (t.startsWith('[') && t.endsWith(']'))
 }
 
+const agentPhrases = ['היי 👋', 'שמי ', 'ואני אטפל', 'איך אוכל לעזור',
+  'לוקח לזה', 'ימי עסקים', 'בשמחה', 'לצערי', 'מדיניות',
+  'אשמח לדעת', 'אשמח לעזור', 'נשמח לעזור', 'אפשר לעזור']
+const botPhrases = ['ברוכים הבאים', 'במה נוכל לעזור', 'אנא הזינו',
+  'מעבר לנציג', 'חזרה לתפריט', 'בחר אחת מהאפשרויות']
+
+function detectType(text: string, senderType: string, agentName: string, clientName: string): { type: 'Client' | 'Agent', sender: string } {
+  if (senderType === 'User' || senderType === 'Agent') return { type: 'Agent', sender: agentName }
+  if (senderType === 'Client' || senderType === 'client') return { type: 'Client', sender: clientName }
+  
+  const isBotText = botPhrases.some(p => text.includes(p))
+  const isAgentText = agentPhrases.some(p => text.includes(p)) || (agentName && text.includes(agentName))
+  
+  if (isBotText) return { type: 'Agent', sender: 'בוט' }
+  if (isAgentText) return { type: 'Agent', sender: agentName }
+  return { type: 'Client', sender: clientName }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('id')
     if (!ticketId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
-    const token = await getToken()
+    // Try Supabase first (from webhook)
+    const { data: dbMessages } = await supabase
+      .from('glassix_messages')
+      .select('*')
+      .eq('ticket_id', ticketId)
+      .order('created_at')
 
-    // Get ticket with full details
+    if (dbMessages && dbMessages.length > 0) {
+      const messages = dbMessages
+        .filter(m => m.text && !isJsonBlob(m.text))
+        .map(m => {
+          const timeStr = m.created_at ? new Date(m.created_at).toLocaleTimeString('he-IL', {
+            timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit'
+          }) : ''
+          const isAgent = m.sender_type === 'User' || m.sender_type === 'Agent'
+          return {
+            id: m.message_id,
+            text: m.text,
+            sender: m.sender_name || (isAgent ? 'נציג' : 'לקוח'),
+            time: timeStr,
+            type: isAgent ? 'Agent' : 'Client'
+          }
+        })
+      return NextResponse.json({ messages, source: 'db' })
+    }
+
+    // Fallback: fetch from Glassix API
+    const token = await getToken()
     const res = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-
-    if (!res.ok) {
-      return NextResponse.json({ messages: [] })
-    }
+    if (!res.ok) return NextResponse.json({ messages: [] })
 
     const ticket = await res.json()
-    
-    // Get participant info for sender detection
-    const participants = ticket.participants || []
-    const clientPart = participants.find((p: any) => p.type === 'Client')
-    const agentParts = participants.filter((p: any) => 
-      p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט'
-    )
+    const parts = ticket.participants || []
+    const clientPart = parts.find((p: any) => p.type === 'Client')
+    const agentPart = parts.find((p: any) => p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט')
     const clientName = clientPart?.name || 'לקוח'
-    const agentName = agentParts[0]?.displayName || agentParts[0]?.name || 'נציג'
-    
-    // Collect agent user IDs
-    const agentUserIds = new Set(agentParts.map((p: any) => p.identifier))
-    const botUserIds = new Set(
-      participants
-        .filter((p: any) => p.userName?.includes('@glassix.bot') || p.name === 'בוט')
-        .map((p: any) => p.identifier)
-    )
+    const agentName = agentPart?.displayName || agentPart?.name || 'נציג'
 
     const transactions = ticket.transactions || []
-
-    // Known agent phrases for detection
-    const agentPhrases = ['היי 👋', 'שמי ', 'ואני אטפל', 'איך אוכל לעזור', 
-                          'לוקח לזה', 'ימי עסקים', 'בשמחה', 'לצערי', 
-                          'מדיניות', 'אשמח לדעת', 'אשמח לעזור']
-    const botPhrases = ['ברוכים הבאים', 'במה נוכל לעזור', 'אנא הזינו',
-                        'מעבר לנציג', 'חזרה לתפריט']
-
     const messages = transactions
       .filter((tx: any) => {
-        const text = tx.text || tx.body || tx.content || ''
+        const text = tx.text || ''
         return text.trim().length > 0 && !isJsonBlob(text.trim())
       })
       .map((tx: any) => {
-        const text = tx.text || tx.body || tx.content || ''
-        const sType = tx.senderType || ''
-        const userId = tx.userId || tx.senderId || tx.participantId?.toString() || ''
-
-        let type: 'Client' | 'Agent' = 'Client'
-        let sender = clientName
-
-        // Check by senderType first
-        if (sType === 'User' || sType === 'Agent' || agentUserIds.has(userId)) {
-          type = 'Agent'
-          const agentPart = agentParts.find((p: any) => p.identifier === userId)
-          sender = agentPart?.displayName || agentPart?.name || agentName
-        } else if (botUserIds.has(userId)) {
-          type = 'Agent'
-          sender = 'בוט'
-        } else if (sType === 'Client' || sType === 'client') {
-          type = 'Client'
-          sender = clientName
-        } else {
-          // Fallback: detect by content
-          const isAgentText = agentPhrases.some(p => text.includes(p)) || 
-                              (agentName && text.includes(agentName))
-          const isBotText = botPhrases.some(p => text.includes(p))
-          
-          if (isBotText) { type = 'Agent'; sender = 'בוט' }
-          else if (isAgentText) { type = 'Agent'; sender = agentName }
-          else { type = 'Client'; sender = clientName }
-        }
-
-        // Format time
-        const rawTime = tx.time || tx.createTime || tx.timestamp
+        const text = tx.text || ''
+        const { type, sender } = detectType(text, tx.senderType || '', agentName, clientName)
+        const rawTime = tx.time || tx.createTime
         const timeStr = rawTime ? new Date(rawTime).toLocaleTimeString('he-IL', {
           timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit'
         }) : ''
-
         return { id: tx.id, text, sender, time: timeStr, type }
       })
 
-    return NextResponse.json({ 
-      messages,
-      clientName,
-      agentName,
-      subject: ticket.field1 || '',
-      status: ticket.state || ''
-    })
+    return NextResponse.json({ messages, source: 'api', clientName, agentName })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
