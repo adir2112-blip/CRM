@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
 
 const WORKSPACE = process.env.GLASSIX_WORKSPACE || 'm4l-il'
 const BASE_URL = `https://${WORKSPACE}.glassix.com`
@@ -6,14 +7,15 @@ const API_KEY = process.env.GLASSIX_API_KEY!
 const API_SECRET = process.env.GLASSIX_API_SECRET!
 const USERNAME = process.env.GLASSIX_USERNAME!
 
-// Token cache
-let tokenCache: { token: string; expires: number } | null = null
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+)
 
-// Ticket list cache — 5 minutes
-let listCache: { tickets: any[]; expires: number } | null = null
+const CACHE_KEY = `glassix_tickets_${WORKSPACE}`
+const CACHE_MINUTES = 5
 
 async function getToken(): Promise<string> {
-  if (tokenCache && Date.now() < tokenCache.expires - 300000) return tokenCache.token
   const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -21,8 +23,7 @@ async function getToken(): Promise<string> {
   })
   if (!res.ok) throw new Error('Glassix token error: ' + await res.text())
   const data = await res.json()
-  tokenCache = { token: data.access_token, expires: Date.now() + (data.expires_in || 10800) * 1000 }
-  return tokenCache.token
+  return data.access_token
 }
 
 function toGlassixDate(d: Date): string {
@@ -30,48 +31,50 @@ function toGlassixDate(d: Date): string {
   return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00:00`
 }
 
-function normalizePhone(phone: string): string {
-  return phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '')
-}
+async function getTicketsWithCache(): Promise<any[]> {
+  // Check Supabase cache
+  const { data: cached } = await supabase
+    .from('glassix_cache')
+    .select('tickets, updated_at')
+    .eq('cache_key', CACHE_KEY)
+    .single()
 
-async function getTicketList(token: string): Promise<any[]> {
-  // Clear cache to force fresh fetch
-  listCache = null
+  if (cached) {
+    const age = (Date.now() - new Date(cached.updated_at).getTime()) / 1000 / 60
+    if (age < CACHE_MINUTES) {
+      return JSON.parse(cached.tickets)
+    }
+  }
 
+  // Fetch fresh from Glassix
+  const token = await getToken()
   const now = new Date()
   const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
   const since = toGlassixDate(startOfMonth)
   const until = toGlassixDate(now)
 
-  const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
-  
   let allTickets: any[] = []
-  let currentUrl: string | null = url
+  let currentUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
 
   while (currentUrl) {
     const res = await fetch(currentUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-
-    if (res.status === 429) {
-      if (allTickets.length > 0) break
-      throw new Error('Rate limit — נסה שוב בעוד דקה')
-    }
+    if (res.status === 429) break
     if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
-
     const data = await res.json()
     const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
     allTickets = allTickets.concat(tickets)
-
-    // Check for next page
-    const next = data.paging?.next || data.nextPage || null
-    if (next && typeof next === 'string') {
-      currentUrl = next.startsWith('http') ? next : `${BASE_URL}${next.startsWith('/') ? '' : '/'}${next}`
-    } else {
-      currentUrl = null
-    }
-    if (allTickets.length >= 500) break
+    const next = data.paging?.next || null
+    currentUrl = next ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+    if (allTickets.length >= 1000) break
   }
 
-  listCache = { tickets: allTickets, expires: Date.now() + 3 * 60 * 1000 }
+  // Save to Supabase cache
+  await supabase.from('glassix_cache').upsert({
+    cache_key: CACHE_KEY,
+    tickets: JSON.stringify(allTickets),
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'cache_key' })
+
   return allTickets
 }
 
@@ -86,23 +89,23 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'נדרש פרמטר חיפוש' }, { status: 400 })
     }
 
-    const token = await getToken()
-    const allTickets = await getTicketList(token)
+    const allTickets = await getTicketsWithCache()
 
     const phoneNorm = phone ? phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '') : null
     const emailNorm = email ? email.toLowerCase() : null
 
     const matched = allTickets.filter((t: any) => {
-      const parts: any[] = t.participants || []
-      return parts.some((p: any) => {
+      return (t.participants || []).some((p: any) => {
         if (p.type !== 'Client' || !p.identifier) return false
         if (phoneNorm) {
-          // Remove 972/0 prefix then compare
           const pNorm = p.identifier.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '')
           if (pNorm === phoneNorm) return true
         }
         if (emailNorm && p.identifier.toLowerCase() === emailNorm) return true
-        if (idNumber && p.identifier.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '') === idNumber.replace(/\D/g, '').replace(/^0/, '')) return true
+        if (idNumber) {
+          const idNorm = idNumber.replace(/\D/g, '')
+          if (p.identifier.replace(/\D/g, '') === idNorm) return true
+        }
         return false
       })
     })
@@ -123,31 +126,7 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ 
-      total: matched.length, 
-      tickets: formatted,
-      debug: {
-        totalInMonth: allTickets.length,
-        searchPhone: phoneNorm,
-        searchPhoneRaw: phone,
-        channels: allTickets.reduce((acc: any, t: any) => {
-          const ch = t.primaryProtocolType || 'unknown'
-          acc[ch] = (acc[ch] || 0) + 1
-          return acc
-        }, {}),
-        whatsappSample: allTickets
-          .filter((t: any) => t.primaryProtocolType === 'WhatsApp')
-          .slice(0, 3)
-          .map((t: any) => ({
-            id: t.id,
-            participants: (t.participants || []).map((p: any) => ({
-              type: p.type,
-              identifier: p.identifier,
-              protocol: p.protocolType
-            }))
-          }))
-      }
-    })
+    return NextResponse.json({ total: matched.length, tickets: formatted })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
