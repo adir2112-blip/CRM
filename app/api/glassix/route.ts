@@ -56,16 +56,25 @@ export async function GET(request: Request) {
     // Fetch all tickets for the month (participants ARE included per Glassix docs)
     let allTickets: any[] = []
     let nextUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
+    let pageCount = 0
 
-    while (nextUrl) {
-      const res = await fetch(nextUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-      if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
+    while (nextUrl && pageCount < 5) {
+      // Retry up to 2 times on 429
+      let res: Response | null = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await fetch(nextUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+        if (res.status === 429) {
+          await new Promise(r => setTimeout(r, 6000)) // wait 6 seconds
+          continue
+        }
+        break
+      }
+      if (!res || !res.ok) throw new Error(`Glassix list ${res?.status}: ${await res?.text()}`)
       const data = await res.json()
-      // Glassix returns tickets under empty string key ""
       const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
       allTickets = allTickets.concat(tickets)
       nextUrl = data.paging?.next || null
-      if (allTickets.length > 1000) break
+      pageCount++
     }
 
     // Filter by participant identifier using normalized phone
