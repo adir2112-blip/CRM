@@ -104,7 +104,11 @@ function DashboardPage() {
 
   // Modal states
   const [selectedCase, setSelectedCase] = useState<any>(null)
-  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'>('details')
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'glassix'>('details')
+  const [glassixTickets, setGlassixTickets] = useState<any[]>([])
+  const [glassixLoading, setGlassixLoading] = useState(false)
+  const [glassixError, setGlassixError] = useState('')
+  const [glassixTotal, setGlassixTotal] = useState(0)
   const [logs, setLogs] = useState<any[]>([])
   const [newLog, setNewLog] = useState('')
   const [editStatus, setEditStatus] = useState('')
@@ -161,6 +165,10 @@ function DashboardPage() {
     setLogs(logsData || [])
     const { data: att } = await supabase.from('case_attachments').select('*').eq('case_id', c.id).order('created_at')
     setAttachments(att || [])
+    // Load Glassix conversations
+    setGlassixTickets([])
+    setGlassixError('')
+    setGlassixTotal(0)
     if (c.phone) {
       const { data: hist } = await supabase.from('cases').select('id,created_at,status_name,cat1_name,cat2_name,agent_name,org_name').neq('id', c.id).eq('phone', c.phone).order('created_at', { ascending: false }).limit(20)
       setHistory(hist || [])
@@ -201,6 +209,22 @@ function DashboardPage() {
     showToast('תזכורת נוספה ✓')
   }
 
+  async function loadGlassix(c: any) {
+    setGlassixLoading(true)
+    setGlassixError('')
+    try {
+      const params = new URLSearchParams()
+      if (c.phone) params.set('phone', c.phone)
+      if (c.id_number) params.set('id_number', c.id_number)
+      const res = await fetch(`/api/glassix?${params.toString()}`)
+      const data = await res.json()
+      if (data.error) { setGlassixError(data.error); setGlassixTickets([]) }
+      else { setGlassixTickets(data.tickets || []); setGlassixTotal(data.total || 0) }
+    } catch (e: any) {
+      setGlassixError('שגיאה בחיבור ל-Glassix')
+    }
+    setGlassixLoading(false)
+  }
   async function deleteCase(id: number) {
     if (!confirm('למחוק פניה לצמיתות?')) return
     await supabase.from('reminders').delete().eq('case_id', id)
@@ -501,6 +525,9 @@ function DashboardPage() {
                 📎 קבצים {attachments.length>0 && <span className="badge b-gray" style={{ fontSize:10, marginRight:4 }}>{attachments.length}</span>}
               </div>
               <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 SMS</div>
+              <div className={`tab${caseTab==='glassix'?' active':''}`} onClick={() => { setCaseTab('glassix'); if(glassixTickets.length===0 && !glassixLoading) loadGlassix(selectedCase) }}>
+                🟦 Glassix {glassixTotal>0 && <span className="badge b-blue" style={{ fontSize:10, marginRight:4 }}>{glassixTotal}</span>}
+              </div>
             </div>
 
             {/* Details tab */}
@@ -679,6 +706,55 @@ function DashboardPage() {
                     }}>רשום תגובה</button>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Glassix tab */}
+            {caseTab==='glassix' && (
+              <div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#1e293b' }}>🟦 שיחות Glassix {glassixTotal>0 && <span style={{ fontSize:11, color:'#64748b' }}>({glassixTotal} נמצאו)</span>}</div>
+                  <button className="btn btn-xs" style={{ background:'#eff4ff', color:'#2563eb', border:'1px solid #bfdbfe' }} onClick={() => loadGlassix(selectedCase)}>🔄 רענן</button>
+                </div>
+                {glassixLoading && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>⏳ טוען שיחות...</div>}
+                {glassixError && <div style={{ padding:'12px 14px', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, fontSize:12, color:'#b91c1c' }}>⚠️ {glassixError}</div>}
+                {!glassixLoading && !glassixError && glassixTickets.length===0 && (
+                  <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>
+                    <div style={{ fontSize:28, marginBottom:8 }}>🟦</div>
+                    <div style={{ fontSize:13 }}>לא נמצאו שיחות ב-Glassix</div>
+                    <div style={{ fontSize:11, marginTop:4 }}>חיפוש לפי: {selectedCase.phone}{selectedCase.id_number?' / '+selectedCase.id_number:''}</div>
+                  </div>
+                )}
+                {glassixTickets.map((t: any) => {
+                  const icons: Record<string,string> = { WhatsApp:'💬', Mail:'📧', Chat:'💭', SMS:'📱' }
+                  const colors: Record<string,string> = { Open:'#2563eb', Closed:'#16a34a', Pending:'#d97706' }
+                  return (
+                    <div key={t.id} style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 14px', marginBottom:10, border:'1px solid var(--border)' }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                          <span style={{ fontSize:16 }}>{icons[t.channel]||'💬'}</span>
+                          <span style={{ fontSize:12, fontWeight:600 }}>{t.channel}</span>
+                          {t.assignee && <span style={{ fontSize:11, color:'var(--text3)' }}>· {t.assignee}</span>}
+                        </div>
+                        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                          <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:999, background:(colors[t.status]||'#6b7280')+'18', color:colors[t.status]||'#6b7280' }}>{t.status}</span>
+                          <span style={{ fontSize:10, color:'var(--text3)' }}>{t.created?new Date(t.created).toLocaleDateString('he-IL'):''}</span>
+                        </div>
+                      </div>
+                      {t.subject && <div style={{ fontSize:12, fontWeight:500, color:'#374151', marginBottom:8 }}>{t.subject}</div>}
+                      {t.messages?.length>0 && (
+                        <div style={{ borderTop:'1px solid var(--border)', paddingTop:8 }}>
+                          {t.messages.slice(-3).map((m: any) => (
+                            <div key={m.id} style={{ marginBottom:6, display:'flex', gap:8 }}>
+                              <span style={{ fontSize:10, color:'var(--text3)', whiteSpace:'nowrap', marginTop:1 }}>{m.time?new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}):''}</span>
+                              <div><span style={{ fontSize:10, fontWeight:700, color:m.type==='Client'?'#2563eb':'#374151', marginLeft:4 }}>{m.sender}:</span><span style={{ fontSize:11, color:'#4b5568' }}>{m.text}</span></div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>
