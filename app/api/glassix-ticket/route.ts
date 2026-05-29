@@ -67,12 +67,17 @@ export async function GET(request: Request) {
 
     const html = await htmlRes.text()
 
-    // Return raw HTML snippet for debugging
     if (debug) {
+      const r = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const raw = await r.json()
       return NextResponse.json({ 
-        htmlSnippet: html.slice(0, 3000),
-        clientName,
-        agentName
+        status: r.status,
+        keys: Object.keys(raw),
+        transactions: raw.transactions,
+        transactionsCount: raw.transactionsCount,
+        clientName: raw.participants?.find((p: any) => p.type === 'Client')?.name,
       })
     }
 
