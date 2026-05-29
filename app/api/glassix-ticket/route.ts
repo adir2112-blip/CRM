@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     if (!ticketId) return NextResponse.json({ error: 'חסר מזהה טיקט' }, { status: 400 })
 
     const token = await getToken()
-    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}`, {
+    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
     if (!res.ok) throw new Error(`Ticket error ${res.status}: ${await res.text()}`)
