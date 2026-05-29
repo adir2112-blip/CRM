@@ -49,37 +49,39 @@ async function getTicketsWithCache(): Promise<any[]> {
   // Fetch fresh from Glassix
   const token = await getToken()
   const now = new Date()
-  // Use Israel timezone — subtract 3 hours to get Israel midnight
-  const israelNow = new Date(now.getTime() + 3 * 60 * 60 * 1000)
-  // Start of current month in Israel time
-  const israelStartOfMonth = new Date(Date.UTC(israelNow.getUTCFullYear(), israelNow.getUTCMonth(), 1, 0, 0, 0))
-  // Convert back to UTC for API
-  const startUTC = new Date(israelStartOfMonth.getTime() - 3 * 60 * 60 * 1000)
-  const since = toGlassixDate(startUTC)
-  const until = toGlassixDate(now)
+  
+  // Split into two 15-day periods to cover 30 days
+  const period1End = new Date(now)
+  const period1Start = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
+  const period2End = new Date(period1Start.getTime() - 1000)
+  const period2Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-  let allTickets: any[] = []
-  let currentUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
-
-  while (currentUrl) {
-    const res = await fetch(currentUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-    if (res.status === 429) break
-    if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
-    const data = await res.json()
-    const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
-    allTickets = allTickets.concat(tickets)
+  async function fetchPeriod(from: Date, to: Date): Promise<any[]> {
+    const since = toGlassixDate(from)
+    const until = toGlassixDate(to)
+    let tickets: any[] = []
+    let currentUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed&sortOrder=desc`
     
-    // Debug pagination
-    console.log(`Glassix page: ${tickets.length} tickets, total so far: ${allTickets.length}, paging:`, JSON.stringify(data.paging))
-    
-    const next = data.paging?.next || data.paging?.nextPageToken || null
-    if (next && typeof next === 'string') {
-      currentUrl = next.startsWith('http') ? next : `${BASE_URL}${next.startsWith('/') ? '' : '/api/v1.2/'}${next}`
-    } else {
-      currentUrl = null
+    while (currentUrl) {
+      const res = await fetch(currentUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+      if (res.status === 429) break
+      if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
+      const data = await res.json()
+      const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+      tickets = tickets.concat(batch)
+      const next = data.paging?.next || null
+      currentUrl = next ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+      if (tickets.length >= 2000) break
     }
-    if (allTickets.length >= 5000) break // safety only
+    return tickets
   }
+
+  const [period1Tickets, period2Tickets] = await Promise.all([
+    fetchPeriod(period1Start, period1End),
+    fetchPeriod(period2Start, period2End)
+  ])
+  
+  const allTickets = [...period1Tickets, ...period2Tickets]
 
   // Save to Supabase cache
   await supabase.from('glassix_cache').upsert({
