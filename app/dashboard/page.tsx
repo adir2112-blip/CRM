@@ -193,6 +193,45 @@ function DashboardPage() {
   const [modalList, setModalList] = useState<any[]>([])
   const [recurringModal, setRecurringModal] = useState<{title:string, cases:any[]} | null>(null)
 
+  const [smartSearch, setSmartSearch] = useState('')
+  const [smartResult, setSmartResult] = useState<any>(null)
+  const [smartLoading, setSmartLoading] = useState(false)
+
+  async function doSmartSearch() {
+    if (!smartSearch.trim()) return
+    setSmartLoading(true)
+    const q = smartSearch.trim().toLowerCase()
+    const matched = cases.filter(c =>
+      c.customer_name?.toLowerCase().includes(q) ||
+      c.phone?.replace(/\D/g,'').includes(q.replace(/\D/g,'')) ||
+      c.id_number?.includes(q)
+    )
+    if (matched.length === 0) { setSmartResult(null); setSmartLoading(false); return }
+    
+    // Group by customer (phone or id)
+    const first = matched[0]
+    const customerCases = cases.filter(c =>
+      (first.phone && c.phone === first.phone) ||
+      (first.id_number && c.id_number === first.id_number)
+    ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 864e5)
+    const last7Days = customerCases.filter(c => new Date(c.created_at) >= sevenDaysAgo).length
+    const openCases = customerCases.filter(c => !c.status_name?.includes('טופל')).length
+
+    setSmartResult({
+      name: first.customer_name,
+      phone: first.phone,
+      id_number: first.id_number,
+      totalCases: customerCases.length,
+      openCases,
+      last7Days,
+      isRecurring: last7Days >= 2,
+      cases: customerCases
+    })
+    setSmartLoading(false)
+  }
   const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
   const isAdmin = profile?.role === 'admin'
 
@@ -463,7 +502,85 @@ function DashboardPage() {
           </>}
         </div>
 
-        {/* In progress filter */}
+        {/* Smart customer search */}
+        <div className="card card-pad" style={{ marginBottom:16 }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:12, color:'#1e293b' }}>🔍 חיפוש לקוח חכם</div>
+          <div style={{ display:'flex', gap:10 }}>
+            <input
+              className="form-input"
+              value={smartSearch}
+              onChange={e => { setSmartSearch(e.target.value); if(!e.target.value) setSmartResult(null) }}
+              onKeyDown={e => e.key === 'Enter' && doSmartSearch()}
+              placeholder="שם לקוח / טלפון / ת״ז..."
+              style={{ flex:1 }}
+            />
+            <button className="btn btn-primary" onClick={doSmartSearch} disabled={smartLoading}>
+              {smartLoading ? '⏳' : '🔍 חפש'}
+            </button>
+            {smartResult && <button className="btn" onClick={() => { setSmartResult(null); setSmartSearch('') }}>✕ נקה</button>}
+          </div>
+
+          {smartResult && (
+            <div style={{ marginTop:16 }}>
+              {/* Customer card */}
+              <div style={{ background:'linear-gradient(135deg,#eff6ff,#f5f3ff)', borderRadius:12, padding:'16px 20px', marginBottom:14, border:'1px solid #c7d2fe' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+                  <div>
+                    <div style={{ fontSize:18, fontWeight:800, color:'#1e293b' }}>{smartResult.name}</div>
+                    <div style={{ fontSize:13, color:'#64748b', marginTop:4, display:'flex', gap:16 }}>
+                      {smartResult.phone && <span>📱 {smartResult.phone}</span>}
+                      {smartResult.id_number && <span>🪪 {smartResult.id_number}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                    <div style={{ textAlign:'center', background:'#fff', borderRadius:10, padding:'8px 16px', boxShadow:'0 1px 4px rgba(0,0,0,0.08)' }}>
+                      <div style={{ fontSize:20, fontWeight:800, color:'#2563eb' }}>{smartResult.totalCases}</div>
+                      <div style={{ fontSize:10, color:'#94a3b8' }}>סה"כ פניות</div>
+                    </div>
+                    <div style={{ textAlign:'center', background:'#fff', borderRadius:10, padding:'8px 16px', boxShadow:'0 1px 4px rgba(0,0,0,0.08)' }}>
+                      <div style={{ fontSize:20, fontWeight:800, color:'#f59e0b' }}>{smartResult.openCases}</div>
+                      <div style={{ fontSize:10, color:'#94a3b8' }}>פתוחות</div>
+                    </div>
+                    <div style={{ textAlign:'center', background:'#fff', borderRadius:10, padding:'8px 16px', boxShadow:'0 1px 4px rgba(0,0,0,0.08)' }}>
+                      <div style={{ fontSize:20, fontWeight:800, color: smartResult.isRecurring ? '#dc2626' : '#10b981' }}>{smartResult.last7Days}</div>
+                      <div style={{ fontSize:10, color:'#94a3b8' }}>7 ימים</div>
+                    </div>
+                  </div>
+                </div>
+                {smartResult.isRecurring && (
+                  <div style={{ marginTop:10, padding:'6px 12px', background:'#fef2f2', borderRadius:8, border:'1px solid #fca5a5', fontSize:12, color:'#dc2626', fontWeight:600 }}>
+                    ⚠️ לקוח חוזר — {smartResult.last7Days} פניות ב-7 ימים האחרונים
+                  </div>
+                )}
+              </div>
+
+              {/* Cases timeline */}
+              <div style={{ fontSize:12, fontWeight:700, color:'#64748b', textTransform:'uppercase', marginBottom:8 }}>היסטוריית פניות</div>
+              <div style={{ maxHeight:280, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
+                {smartResult.cases.map((c: any) => (
+                  <div key={c.id} onClick={() => openCase(c)} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:'var(--bg3)', borderRadius:8, cursor:'pointer', border:'1px solid var(--border)', transition:'background 0.15s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background='#f0f4ff')}
+                    onMouseLeave={e => (e.currentTarget.style.background='var(--bg3)')}>
+                    <div style={{ width:36, height:36, borderRadius:'50%', background:c.status_name?.includes('טופל')?'#dcfce7':'#dbeafe', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
+                      {c.status_name?.includes('טופל') ? '✅' : '⏳'}
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, fontWeight:600, color:'#1e293b' }}>{c.cat1_name}{c.cat2_name ? ' › ' + c.cat2_name : ''}</div>
+                      <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>{fmt(c.created_at)} · {c.agent_name} · {c.org_name?.split(' ')[0]}</div>
+                    </div>
+                    <span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {smartResult && smartResult.cases.length === 0 && (
+            <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>לא נמצאו פניות ללקוח זה</div>
+          )}
+          {smartSearch && !smartResult && !smartLoading && (
+            <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>לא נמצא לקוח עם פרטים אלו</div>
+          )}
+        </div>
         <div className="card card-pad" style={{ marginBottom:16 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
             <div style={{ fontSize:13, fontWeight:700 }}>⏳ בטיפול נציג</div>
