@@ -25,52 +25,64 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('id')
-    if (!ticketId) return NextResponse.json({ error: 'חסר מזהה טיקט' }, { status: 400 })
+    if (!ticketId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
     const token = await getToken()
-    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
+
+    // Try the correct endpoint
+    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}/messages`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-    if (!res.ok) throw new Error(`Ticket error ${res.status}: ${await res.text()}`)
 
-    const detail = await res.json()
-    
-    // Return raw transactions for debugging + formatted messages
-    const messages = (detail.transactions || [])
-      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note' || tx.type === 'Email' || tx.type === 'IncomingMessage' || tx.type === 'OutgoingMessage')
-      .map((tx: any) => {
-        // Detect if client sent this message using multiple possible fields
-        const isClient = 
-          tx.senderType === 'Client' || tx.senderType === 'client' ||
-          tx.direction === 'Incoming' || tx.direction === 'incoming' ||
-          tx.type === 'IncomingMessage' ||
-          tx.isClient === true ||
-          tx.from?.type === 'Client' ||
-          (tx.senderType !== 'User' && tx.senderType !== 'Agent' && tx.senderType !== 'Bot' && tx.type !== 'OutgoingMessage' && tx.direction !== 'Outgoing')
-        
-        return {
-          id: tx.id,
-          text: tx.text || tx.body || tx.htmlBody?.replace(/<[^>]+>/g, '') || tx.content || '',
-          sender: tx.senderName || tx.userName || tx.fromName || tx.from?.name || '',
-          time: tx.time || tx.createTime,
-          type: isClient ? 'Client' : 'Agent',
-          rawType: tx.senderType, // for debug
-        }
+    if (!res.ok) {
+      // Fallback — try alternate endpoint
+      const res2 = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       })
-
-    // If no messages, return raw data for debugging
-    if (messages.length === 0) {
+      if (!res2.ok) {
+        return NextResponse.json({ 
+          messages: [], 
+          debug: { 
+            messagesEndpoint: res.status,
+            ticketEndpoint: res2.status,
+            error: await res2.text()
+          } 
+        })
+      }
+      const detail = await res2.json()
+      // Return raw for debugging
       return NextResponse.json({ 
         messages: [], 
-        debug: {
+        debug: { 
+          keys: Object.keys(detail),
           transactionCount: (detail.transactions || []).length,
-          transactionTypes: Array.from(new Set((detail.transactions || []).map((tx: any) => tx.type as string))),
-          sampleTx: (detail.transactions || []).slice(0, 2)
-        }
+          transactionSample: (detail.transactions || []).slice(0, 2),
+          messagesSample: (detail.messages || []).slice(0, 2)
+        } 
       })
     }
 
-    return NextResponse.json({ messages, subject: detail.subject || detail.field1 || '', status: detail.state })
+    const data = await res.json()
+    // Try to parse messages
+    const rawMessages = Array.isArray(data) ? data : (data.messages || data.transactions || data[''] || [])
+    
+    // Return raw + formatted
+    const messages = rawMessages.map((m: any) => {
+      const isClient = m.senderType === 'Client' || m.direction === 'Incoming' || m.type === 'Incoming'
+      return {
+        id: m.id,
+        text: m.text || m.body || m.content || '',
+        sender: m.senderName || m.userName || m.sender || '',
+        time: m.time || m.createTime || m.timestamp,
+        type: isClient ? 'Client' : 'Agent',
+        rawSenderType: m.senderType,
+        rawDirection: m.direction,
+        rawType: m.type
+      }
+    }).filter((m: any) => m.text)
+
+    return NextResponse.json({ messages, subject: '', status: '' })
+
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
