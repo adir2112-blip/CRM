@@ -37,17 +37,26 @@ export async function GET(request: Request) {
     
     // Return raw transactions for debugging + formatted messages
     const messages = (detail.transactions || [])
-      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note' || tx.type === 'Email' || tx.type === 'IncomingMessage')
-      .map((tx: any) => ({
-        id: tx.id,
-        text: tx.text || tx.body || tx.htmlBody?.replace(/<[^>]+>/g, '') || tx.content || '',
-        sender: tx.senderName || tx.userName || tx.fromName || tx.from || '',
-        time: tx.time || tx.createTime,
-        // Check multiple fields for client detection
-        type: (tx.senderType === 'Client' || tx.senderType === 'client' || 
-               tx.direction === 'Incoming' || tx.direction === 'incoming' ||
-               tx.isClient === true) ? 'Client' : 'Agent',
-      }))
+      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note' || tx.type === 'Email' || tx.type === 'IncomingMessage' || tx.type === 'OutgoingMessage')
+      .map((tx: any) => {
+        // Detect if client sent this message using multiple possible fields
+        const isClient = 
+          tx.senderType === 'Client' || tx.senderType === 'client' ||
+          tx.direction === 'Incoming' || tx.direction === 'incoming' ||
+          tx.type === 'IncomingMessage' ||
+          tx.isClient === true ||
+          tx.from?.type === 'Client' ||
+          (tx.senderType !== 'User' && tx.senderType !== 'Agent' && tx.senderType !== 'Bot' && tx.type !== 'OutgoingMessage' && tx.direction !== 'Outgoing')
+        
+        return {
+          id: tx.id,
+          text: tx.text || tx.body || tx.htmlBody?.replace(/<[^>]+>/g, '') || tx.content || '',
+          sender: tx.senderName || tx.userName || tx.fromName || tx.from?.name || '',
+          time: tx.time || tx.createTime,
+          type: isClient ? 'Client' : 'Agent',
+          rawType: tx.senderType, // for debug
+        }
+      })
 
     // If no messages, return raw data for debugging
     if (messages.length === 0) {

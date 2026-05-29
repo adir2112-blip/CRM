@@ -782,7 +782,13 @@ function DashboardPage() {
               <div>
                 <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:'#1e293b' }}>🟦 שיחות Glassix {glassixTotal>0 && <span style={{ fontSize:11, color:'#64748b' }}>({glassixTotal} נמצאו)</span>}</div>
-                  <button className="btn btn-xs" style={{ background:'#eff4ff', color:'#2563eb', border:'1px solid #bfdbfe' }} onClick={() => loadGlassix(selectedCase)}>🔄 רענן</button>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button className="btn btn-xs" style={{ background:'#fef3c7', color:'#b45309', border:'1px solid #fcd34d' }} onClick={async () => {
+                      await fetch('/api/glassix-refresh', { method:'POST' })
+                      loadGlassix(selectedCase)
+                    }}>🔄 רענן cache</button>
+                    <button className="btn btn-xs" style={{ background:'#eff4ff', color:'#2563eb', border:'1px solid #bfdbfe' }} onClick={() => loadGlassix(selectedCase)}>רענן</button>
+                  </div>
                 </div>
                 {glassixLoading && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>⏳ טוען שיחות...</div>}
                 {glassixError && <div style={{ padding:'12px 14px', background:'#fef2f2', border:'1px solid #fca5a5', borderRadius:8, fontSize:12, color:'#b91c1c' }}>⚠️ {glassixError}</div>}
