@@ -69,8 +69,8 @@ export async function GET(request: Request) {
     const since = toGlassixDate(thirtyDaysAgo)
     const until = toGlassixDate(now).replace('00:00:00:00', '23:59:59:00')
 
-    const params = new URLSearchParams({ since, until })
-    const listRes = await fetch(`${BASE_URL}/api/v1.2/tickets/list?${params}`, {
+    const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
+    const listRes = await fetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`
