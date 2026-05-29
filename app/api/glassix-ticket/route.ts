@@ -63,7 +63,14 @@ export async function GET(request: Request) {
     )
 
     const transactions = ticket.transactions || []
-    
+
+    // Known agent phrases for detection
+    const agentPhrases = ['היי 👋', 'שמי ', 'ואני אטפל', 'איך אוכל לעזור', 
+                          'לוקח לזה', 'ימי עסקים', 'בשמחה', 'לצערי', 
+                          'מדיניות', 'אשמח לדעת', 'אשמח לעזור']
+    const botPhrases = ['ברוכים הבאים', 'במה נוכל לעזור', 'אנא הזינו',
+                        'מעבר לנציג', 'חזרה לתפריט']
+
     const messages = transactions
       .filter((tx: any) => {
         const text = tx.text || tx.body || tx.content || ''
@@ -72,12 +79,13 @@ export async function GET(request: Request) {
       .map((tx: any) => {
         const text = tx.text || tx.body || tx.content || ''
         const sType = tx.senderType || ''
-        const userId = tx.userId || tx.senderId || ''
-        
+        const userId = tx.userId || tx.senderId || tx.participantId?.toString() || ''
+
         let type: 'Client' | 'Agent' = 'Client'
         let sender = clientName
-        
-        if (sType === 'Agent' || sType === 'User' || agentUserIds.has(userId)) {
+
+        // Check by senderType first
+        if (sType === 'User' || sType === 'Agent' || agentUserIds.has(userId)) {
           type = 'Agent'
           const agentPart = agentParts.find((p: any) => p.identifier === userId)
           sender = agentPart?.displayName || agentPart?.name || agentName
@@ -87,28 +95,24 @@ export async function GET(request: Request) {
         } else if (sType === 'Client' || sType === 'client') {
           type = 'Client'
           sender = clientName
-        } else if (tx.senderName && tx.senderName !== clientName) {
-          // If senderName is different from client name — it's agent or bot
-          type = 'Agent'
-          sender = tx.senderName
+        } else {
+          // Fallback: detect by content
+          const isAgentText = agentPhrases.some(p => text.includes(p)) || 
+                              (agentName && text.includes(agentName))
+          const isBotText = botPhrases.some(p => text.includes(p))
+          
+          if (isBotText) { type = 'Agent'; sender = 'בוט' }
+          else if (isAgentText) { type = 'Agent'; sender = agentName }
+          else { type = 'Client'; sender = clientName }
         }
 
         // Format time
         const rawTime = tx.time || tx.createTime || tx.timestamp
-        const timeStr = rawTime ? new Date(rawTime).toLocaleTimeString('he-IL', { 
-          timeZone: 'Asia/Jerusalem', 
-          hour: '2-digit', 
-          minute: '2-digit' 
+        const timeStr = rawTime ? new Date(rawTime).toLocaleTimeString('he-IL', {
+          timeZone: 'Asia/Jerusalem', hour: '2-digit', minute: '2-digit'
         }) : ''
 
-        return {
-          id: tx.id,
-          text,
-          sender,
-          time: timeStr,
-          rawTime,
-          type,
-        }
+        return { id: tx.id, text, sender, time: timeStr, type }
       })
 
     return NextResponse.json({ 

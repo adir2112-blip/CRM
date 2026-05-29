@@ -211,7 +211,11 @@ function DashboardPage() {
     setStatuses(st || [])
   }, [profile])
 
-  useEffect(() => { loadCases() }, [loadCases])
+  useEffect(() => { 
+    loadCases()
+    // Warm Glassix cache in background
+    fetch('/api/glassix?phone=0500000000').catch(() => {})
+  }, [loadCases])
 
   useEffect(() => {
     const caseId = searchParams?.get('openCase')
