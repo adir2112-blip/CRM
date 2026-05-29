@@ -29,59 +29,34 @@ export async function GET(request: Request) {
 
     const token = await getToken()
 
-    // Try the correct endpoint
-    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}/messages`, {
+    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/get?ticketId=${ticketId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
 
     if (!res.ok) {
-      // Fallback — try alternate endpoint
-      const res2 = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}`, {
+      const htmlRes = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}/html`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      if (!res2.ok) {
-        return NextResponse.json({ 
-          messages: [], 
-          debug: { 
-            messagesEndpoint: res.status,
-            ticketEndpoint: res2.status,
-            error: await res2.text()
-          } 
-        })
-      }
-      const detail = await res2.json()
-      // Return raw for debugging
-      return NextResponse.json({ 
-        messages: [], 
-        debug: { 
-          keys: Object.keys(detail),
-          transactionCount: (detail.transactions || []).length,
-          transactionSample: (detail.transactions || []).slice(0, 2),
-          messagesSample: (detail.messages || []).slice(0, 2)
-        } 
-      })
+      return NextResponse.json({ messages: [], debug: { getStatus: res.status, getError: await res.text(), htmlStatus: htmlRes.status } })
     }
 
-    const data = await res.json()
-    // Try to parse messages
-    const rawMessages = Array.isArray(data) ? data : (data.messages || data.transactions || data[''] || [])
-    
-    // Return raw + formatted
-    const messages = rawMessages.map((m: any) => {
-      const isClient = m.senderType === 'Client' || m.direction === 'Incoming' || m.type === 'Incoming'
-      return {
-        id: m.id,
-        text: m.text || m.body || m.content || '',
-        sender: m.senderName || m.userName || m.sender || '',
-        time: m.time || m.createTime || m.timestamp,
-        type: isClient ? 'Client' : 'Agent',
-        rawSenderType: m.senderType,
-        rawDirection: m.direction,
-        rawType: m.type
-      }
-    }).filter((m: any) => m.text)
+    const ticket = await res.json()
+    const transactions = ticket.transactions || ticket.messages || []
+    const messages = transactions
+      .filter((tx: any) => (tx.text || tx.body || tx.content || '').trim().length > 0)
+      .map((tx: any) => {
+        const senderType = tx.senderType || ''
+        const isClient = senderType === 'Client' || senderType === 'client' || tx.direction === 'Incoming' || tx.isIncoming === true
+        return {
+          id: tx.id,
+          text: tx.text || tx.body || tx.content || '',
+          sender: tx.senderName || tx.userName || '',
+          time: tx.time || tx.createTime,
+          type: isClient ? 'Client' : 'Agent',
+        }
+      })
 
-    return NextResponse.json({ messages, subject: '', status: '' })
+    return NextResponse.json({ messages, subject: ticket.field1 || '', status: ticket.state || '' })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
