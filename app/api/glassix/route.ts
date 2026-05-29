@@ -49,8 +49,13 @@ async function getTicketsWithCache(): Promise<any[]> {
   // Fetch fresh from Glassix
   const token = await getToken()
   const now = new Date()
-  const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-  const since = toGlassixDate(startOfMonth)
+  // Use Israel timezone — subtract 3 hours to get Israel midnight
+  const israelNow = new Date(now.getTime() + 3 * 60 * 60 * 1000)
+  // Start of current month in Israel time
+  const israelStartOfMonth = new Date(Date.UTC(israelNow.getUTCFullYear(), israelNow.getUTCMonth(), 1, 0, 0, 0))
+  // Convert back to UTC for API
+  const startUTC = new Date(israelStartOfMonth.getTime() - 3 * 60 * 60 * 1000)
+  const since = toGlassixDate(startUTC)
   const until = toGlassixDate(now)
 
   let allTickets: any[] = []
