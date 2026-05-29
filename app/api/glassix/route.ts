@@ -63,7 +63,7 @@ export async function GET(request: Request) {
       const day = String(d.getDate()).padStart(2, '0')
       const month = String(d.getMonth() + 1).padStart(2, '0')
       const year = d.getFullYear()
-      return `${month}/${day}/${year} 00:00:00:00`
+      return `${day}/${month}/${year} 00:00:00:00`
     }
 
     const since = toGlassixDate(sixMonthsAgo)
