@@ -89,6 +89,61 @@ function MiniList({ cases, empty, onClick }: { cases:any[]; empty:string; onClic
   return <>{cases.map(c => <CaseCard key={c.id} c={c} onClick={() => onClick(c)} />)}</>
 }
 
+function GlassixTicket({ ticket: t }: { ticket: any }) {
+  const [expanded, setExpanded] = useState(false)
+  const [msgs, setMsgs] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const icons: Record<string,string> = { WhatsApp:'💬', Mail:'📧', Chat:'💭', SMS:'📱' }
+  const colors: Record<string,string> = { Open:'#2563eb', Closed:'#16a34a', Pending:'#d97706', Snoozed:'#d97706' }
+
+  async function toggle() {
+    if (expanded) { setExpanded(false); return }
+    if (msgs.length > 0) { setExpanded(true); return }
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/glassix-ticket?id=${t.id}`)
+      const data = await res.json()
+      setMsgs(data.messages || [])
+    } catch {}
+    setLoading(false)
+    setExpanded(true)
+  }
+
+  return (
+    <div style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 14px', marginBottom:10, border:'1px solid var(--border)' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={toggle}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:16 }}>{icons[t.channel]||'💬'}</span>
+          <div>
+            <span style={{ fontSize:12, fontWeight:600 }}>{t.channel}</span>
+            {t.assignee && <span style={{ fontSize:11, color:'var(--text3)', marginRight:6 }}> · {t.assignee}</span>}
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:999, background:(colors[t.status]||'#6b7280')+'18', color:colors[t.status]||'#6b7280' }}>{t.status}</span>
+          <span style={{ fontSize:10, color:'var(--text3)' }}>{t.created?new Date(t.created).toLocaleDateString('he-IL'):''}</span>
+          <span style={{ fontSize:12, color:'#2563eb' }}>{loading ? '⏳' : expanded ? '▲' : '▼ פתח'}</span>
+        </div>
+      </div>
+      {t.subject && <div style={{ fontSize:12, fontWeight:500, color:'#374151', marginTop:5 }}>{t.subject}</div>}
+      {t.clientIdentifier && <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>📞 {t.clientIdentifier}</div>}
+      {expanded && (
+        <div style={{ borderTop:'1px solid var(--border)', paddingTop:10, marginTop:10, maxHeight:300, overflowY:'auto' }}>
+          {msgs.length === 0 ? <div style={{ fontSize:11, color:'var(--text3)', textAlign:'center' }}>אין הודעות</div>
+          : msgs.map((m: any) => (
+            <div key={m.id} style={{ marginBottom:8, display:'flex', justifyContent: m.type==='Client'?'flex-start':'flex-end' }}>
+              <div style={{ maxWidth:'80%', padding:'7px 10px', borderRadius:8, background: m.type==='Client'?'#f1f5f9':'#eff4ff', fontSize:12 }}>
+                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2 }}>{m.sender} · {m.time?new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}):''}</div>
+                {m.text}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DashboardPage() {
   const { profile, loading } = useUser()
   const searchParams = useSearchParams()
@@ -725,36 +780,9 @@ function DashboardPage() {
                     <div style={{ fontSize:11, marginTop:4 }}>חיפוש לפי: {selectedCase.phone}{selectedCase.id_number?' / '+selectedCase.id_number:''}</div>
                   </div>
                 )}
-                {glassixTickets.map((t: any) => {
-                  const icons: Record<string,string> = { WhatsApp:'💬', Mail:'📧', Chat:'💭', SMS:'📱' }
-                  const colors: Record<string,string> = { Open:'#2563eb', Closed:'#16a34a', Pending:'#d97706' }
-                  return (
-                    <div key={t.id} style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 14px', marginBottom:10, border:'1px solid var(--border)' }}>
-                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                          <span style={{ fontSize:16 }}>{icons[t.channel]||'💬'}</span>
-                          <span style={{ fontSize:12, fontWeight:600 }}>{t.channel}</span>
-                          {t.assignee && <span style={{ fontSize:11, color:'var(--text3)' }}>· {t.assignee}</span>}
-                        </div>
-                        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                          <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:999, background:(colors[t.status]||'#6b7280')+'18', color:colors[t.status]||'#6b7280' }}>{t.status}</span>
-                          <span style={{ fontSize:10, color:'var(--text3)' }}>{t.created?new Date(t.created).toLocaleDateString('he-IL'):''}</span>
-                        </div>
-                      </div>
-                      {t.subject && <div style={{ fontSize:12, fontWeight:500, color:'#374151', marginBottom:8 }}>{t.subject}</div>}
-                      {t.messages?.length>0 && (
-                        <div style={{ borderTop:'1px solid var(--border)', paddingTop:8 }}>
-                          {t.messages.slice(-3).map((m: any) => (
-                            <div key={m.id} style={{ marginBottom:6, display:'flex', gap:8 }}>
-                              <span style={{ fontSize:10, color:'var(--text3)', whiteSpace:'nowrap', marginTop:1 }}>{m.time?new Date(m.time).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}):''}</span>
-                              <div><span style={{ fontSize:10, fontWeight:700, color:m.type==='Client'?'#2563eb':'#374151', marginLeft:4 }}>{m.sender}:</span><span style={{ fontSize:11, color:'#4b5568' }}>{m.text}</span></div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
+                {glassixTickets.map((t: any) => (
+                  <GlassixTicket key={t.id} ticket={t} />
+                ))}
               </div>
             )}
           </div>
