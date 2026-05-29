@@ -78,7 +78,7 @@ async function getTicketsWithCache(): Promise<any[]> {
     } else {
       currentUrl = null
     }
-    if (allTickets.length >= 1000) break
+    if (allTickets.length >= 5000) break // safety only
   }
 
   // Save to Supabase cache
@@ -139,7 +139,16 @@ export async function GET(request: Request) {
       }
     })
 
-    return NextResponse.json({ total: matched.length, tickets: formatted })
+    return NextResponse.json({ 
+      total: matched.length, 
+      tickets: formatted,
+      debug: {
+        totalFetched: allTickets.length,
+        phoneNorm,
+        specificTicket: allTickets.find((t:any) => t.id === 227730033) ? 'נמצא ✓' : 'לא נמצא ✗',
+        specificTicketData: allTickets.find((t:any) => t.id === 227730033)
+      }
+    })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
