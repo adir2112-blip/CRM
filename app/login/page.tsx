@@ -48,10 +48,14 @@ export default function LoginPage() {
         .login-btn:active:not(:disabled) { transform: translateY(0); }
         .login-card-anim { animation: slideIn 0.6s ease forwards; }
         .stat-chip { animation: float 4s ease-in-out infinite; }
+        @media (max-width: 768px) {
+          .login-left { display: none !important; }
+          .login-right { width: 100% !important; border-radius: 0 !important; box-shadow: none !important; padding: 32px 24px !important; }
+        }
       `}</style>
 
       {/* Left panel — branding */}
-      <div style={{
+      <div className="login-left" style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
@@ -129,7 +133,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right panel — login form */}
-      <div style={{
+      <div className="login-right" style={{
         width: 440,
         display: 'flex',
         alignItems: 'center',

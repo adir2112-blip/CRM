@@ -124,10 +124,10 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
         <Link href="/dashboard" className={`nav-btn${pathname === '/dashboard' ? ' active' : ''}`}>🏠 ראשי</Link>
         <Link href="/new-case" style={{
           padding: '7px 16px', borderRadius: 8, border: 'none',
-          background: pathname === '/new-case' ? 'linear-gradient(135deg,#ea580c,#dc2626)' : 'linear-gradient(135deg,#f59e0b,#f97316)',
+          background: pathname === '/new-case' ? 'linear-gradient(135deg,#047857,#059669)' : 'linear-gradient(135deg,#059669,#10b981)',
           color: '#fff', cursor: 'pointer', fontFamily: 'Heebo, sans-serif',
           fontSize: 13, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5,
-          boxShadow: '0 2px 10px rgba(249,115,22,0.45)', textDecoration: 'none',
+          boxShadow: '0 2px 10px rgba(5,150,105,0.45)', textDecoration: 'none',
           transition: 'all 0.15s', letterSpacing: '0.2px'
         }}>＋ פניה חדשה</Link>
         {/* Agent-only links */}
@@ -137,7 +137,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
         {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
         {isAdmin && <Link href="/agents-status" className={`nav-btn${pathname === '/agents-status' ? ' active' : ''}`}>👥 בטיפול נציגים</Link>}
         {isAdmin && <Link href="/reports" className={`nav-btn${pathname === '/reports' ? ' active' : ''}`}>📊 דוחות</Link>}
-        {isAdmin && <Link href="/analytics" className={`nav-btn${pathname === '/analytics' ? ' active' : ''}`}>📊 דשבורד</Link>}
+        {isAdmin && <Link href="/analytics" className={`nav-btn${pathname === '/analytics' ? ' active' : ''}`}>🎯 דשבורד</Link>}
         <Link href="/calendar" className={`nav-btn${pathname === '/calendar' ? ' active' : ''}`}>📅 יומן</Link>
         {isSuperAdmin && <Link href="/admin" className={`nav-btn${pathname.startsWith('/admin') ? ' active' : ''}`}>⚙ ניהול</Link>}
 
