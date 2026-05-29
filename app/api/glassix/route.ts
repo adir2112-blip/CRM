@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 
 const WORKSPACE = process.env.GLASSIX_WORKSPACE || 'm4l-il'
 const BASE_URL = `https://${WORKSPACE}.glassix.com`
-
 const API_KEY = process.env.GLASSIX_API_KEY!
 const API_SECRET = process.env.GLASSIX_API_SECRET!
 const USERNAME = process.env.GLASSIX_USERNAME!
@@ -13,21 +12,22 @@ async function getToken(): Promise<string> {
   if (tokenCache && Date.now() < tokenCache.expires - 300000) {
     return tokenCache.token
   }
-
   const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ apiKey: API_KEY, apiSecret: API_SECRET, userName: USERNAME })
   })
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error('Glassix token error: ' + err)
-  }
-
+  if (!res.ok) throw new Error('Glassix token error: ' + await res.text())
   const data = await res.json()
   tokenCache = { token: data.access_token, expires: Date.now() + (data.expires_in || 10800) * 1000 }
   return tokenCache.token
+}
+
+function toGlassixDate(d: Date): string {
+  const day = String(d.getDate()).padStart(2, '0')
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const year = d.getFullYear()
+  return `${day}/${month}/${year} 00:00:00:00`
 }
 
 export async function GET(request: Request) {
@@ -43,98 +43,98 @@ export async function GET(request: Request) {
 
     const token = await getToken()
 
-    // Search by identifier — try all provided
+    // Build identifiers to search for
     const identifiers: string[] = []
     if (phone) {
       const digits = phone.replace(/\D/g, '')
-      // Convert Israeli format: 05X -> 9725X
-      const international = digits.startsWith('0') ? '972' + digits.slice(1) : digits.startsWith('972') ? digits : '972' + digits
-      identifiers.push(international)
-      identifiers.push(digits) // also try original
+      const intl = digits.startsWith('0') ? '972' + digits.slice(1) : digits
+      identifiers.push(intl)
+      identifiers.push(digits)
     }
-    if (email) identifiers.push(email)
+    if (email) identifiers.push(email.toLowerCase())
     if (idNumber) identifiers.push(idNumber)
 
-    // Fetch recent tickets list first
+    // Date range — max 1 calendar month
     const now = new Date()
-    const thirtyDaysAgo = new Date(now.getTime() - 28 * 864e5)
-    
-    function toGlassixDate(d: Date): string {
-      const day = String(d.getDate()).padStart(2, '0')
-      const month = String(d.getMonth() + 1).padStart(2, '0')
-      const year = d.getFullYear()
-      return `${day}/${month}/${year} 00:00:00:00`
-    }
-
-    const since = toGlassixDate(thirtyDaysAgo)
+    const since = toGlassixDate(new Date(now.getFullYear(), now.getMonth(), 1)) // start of this month
     const until = toGlassixDate(now).replace('00:00:00:00', '23:59:59:00')
 
-    const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
-    const listRes = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`
+    // Fetch tickets list
+    let allTickets: any[] = []
+    let nextUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
+
+    while (nextUrl) {
+      const res = await fetch(nextUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        throw new Error(`Glassix list ${res.status}: ${err}`)
       }
-    })
-
-    const listStatus = listRes.status
-    const listBody = await listRes.text()
-    
-    if (!listRes.ok) {
-      throw new Error(`Glassix list error ${listStatus}: ${listBody || 'empty response'}`)
+      const data = await res.json()
+      const tickets = Array.isArray(data) ? data : (data.tickets || data.data || [])
+      allTickets = allTickets.concat(tickets)
+      // Handle pagination
+      nextUrl = data.paging?.next || null
+      if (allTickets.length > 500) break // safety
     }
 
-    let tickets: any[] = []
-    try {
-      const parsed = JSON.parse(listBody)
-      tickets = Array.isArray(parsed) ? parsed : (parsed.tickets || parsed.data || [])
-    } catch {
-      throw new Error(`Glassix parse error: ${listBody.slice(0, 200)}`)
-    }
-
-    // Filter tickets by participant identifier
-    const matched = tickets.filter((t: any) => {
-      const participants = t.participants || []
-      return participants.some((p: any) => {
+    // Filter by participant identifier
+    const matched = allTickets.filter((t: any) => {
+      const parts = t.participants || []
+      return parts.some((p: any) => {
         if (!p.identifier) return false
-        const id = p.identifier.replace(/\D/g, '').replace(/^972/, '0')
-        return identifiers.some(search => {
-          const s = search.replace(/\D/g, '').replace(/^972/, '0')
-          return p.identifier === search || id === s || p.identifier.toLowerCase() === search.toLowerCase()
+        const pid = p.identifier.replace(/\D/g, '').replace(/^972/, '0')
+        return identifiers.some(id => {
+          const sid = id.replace(/\D/g, '').replace(/^972/, '0')
+          return p.identifier === id ||
+            pid === sid ||
+            p.identifier.toLowerCase() === id.toLowerCase()
         })
       })
     })
 
-    // Format tickets for display
-    const formatted = matched.slice(0, 20).map((t: any) => ({
-      id: t.id,
-      status: t.status,
-      channel: t.protocolType || t.channelType || 'unknown',
-      subject: t.subject || t.description || '',
-      created: t.createTime || t.created,
-      updated: t.updateTime || t.updated,
-      assignee: t.assignee?.name || t.ownerName || '',
-      participants: (t.participants || []).filter((p: any) => p.type === 'Client').map((p: any) => ({
-        name: p.name,
-        identifier: p.identifier,
-        protocol: p.protocolType
-      })),
-      messages: (t.messages || []).slice(-5).map((m: any) => ({
-        id: m.id,
-        text: m.text || m.content || '',
-        sender: m.senderName || m.sender || '',
-        time: m.createTime || m.time,
-        type: m.senderType || 'agent'
-      }))
+    // Format for display (no messages in list — fetch separately for top 5)
+    const formatted = await Promise.all(matched.slice(0, 10).map(async (t: any) => {
+      // Get ticket details with transactions
+      let messages: any[] = []
+      try {
+        const detailRes = await fetch(`${BASE_URL}/api/v1.2/tickets/${t.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        if (detailRes.ok) {
+          const detail = await detailRes.json()
+          messages = (detail.transactions || [])
+            .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note')
+            .slice(-5)
+            .map((tx: any) => ({
+              id: tx.id,
+              text: tx.text || tx.content || '',
+              sender: tx.senderName || tx.userName || '',
+              time: tx.time || tx.createTime,
+              type: tx.senderType === 'Client' ? 'Client' : 'Agent'
+            }))
+        }
+      } catch {}
+
+      return {
+        id: t.id,
+        status: t.status,
+        channel: t.protocolType || t.channelType || 'WhatsApp',
+        subject: t.subject || '',
+        created: t.open || t.createTime,
+        updated: t.lastActivity || t.updateTime,
+        assignee: t.ownerName || t.assignee?.name || '',
+        participants: (t.participants || [])
+          .filter((p: any) => p.type === 'Client')
+          .map((p: any) => ({ name: p.name, identifier: p.identifier })),
+        messages
+      }
     }))
 
-    return NextResponse.json({
-      total: matched.length,
-      tickets: formatted
-    })
+    return NextResponse.json({ total: matched.length, tickets: formatted })
 
   } catch (e: any) {
-    console.error('Glassix API error:', e.message)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
