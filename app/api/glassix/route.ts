@@ -77,21 +77,20 @@ export async function GET(request: Request) {
     const token = await getToken()
     const allTickets = await getTicketList(token)
 
-    const phoneNorm = phone ? phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '') : null
+    const phoneNorm = phone ? phone.replace(/\D/g, '').slice(-9) : null
     const emailNorm = email ? email.toLowerCase() : null
 
     const matched = allTickets.filter((t: any) => {
       const parts: any[] = t.participants || []
       return parts.some((p: any) => {
         if (p.type !== 'Client' || !p.identifier) return false
-        // Normalize participant identifier — remove all non-digits, remove 972 prefix
-        const pNorm = p.identifier.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '')
-        if (phoneNorm && pNorm === phoneNorm) return true
-        if (emailNorm && p.identifier.toLowerCase() === emailNorm) return true
-        if (idNumber) {
-          const idNorm = idNumber.replace(/\D/g, '')
-          if (pNorm === idNorm || p.identifier === idNumber) return true
+        // Compare last 9 digits — works for 0504411096, 972504411096, 504411096
+        if (phoneNorm) {
+          const pLast9 = p.identifier.replace(/\D/g, '').slice(-9)
+          if (pLast9 === phoneNorm) return true
         }
+        if (emailNorm && p.identifier.toLowerCase() === emailNorm) return true
+        if (idNumber && p.identifier.replace(/\D/g, '') === idNumber.replace(/\D/g, '')) return true
         return false
       })
     })
