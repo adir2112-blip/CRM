@@ -78,14 +78,20 @@ export async function GET(request: Request) {
       body: JSON.stringify({ since, until })
     })
 
+    const listStatus = listRes.status
+    const listBody = await listRes.text()
+    
     if (!listRes.ok) {
-      const err = await listRes.text()
-      const status = listRes.status
-      throw new Error(`Glassix list error ${status}: ${err}`)
+      throw new Error(`Glassix list error ${listStatus}: ${listBody || 'empty response'}`)
     }
 
-    const allTickets = await listRes.json()
-    const tickets = Array.isArray(allTickets) ? allTickets : (allTickets.tickets || [])
+    let tickets: any[] = []
+    try {
+      const parsed = JSON.parse(listBody)
+      tickets = Array.isArray(parsed) ? parsed : (parsed.tickets || parsed.data || [])
+    } catch {
+      throw new Error(`Glassix parse error: ${listBody.slice(0, 200)}`)
+    }
 
     // Filter tickets by participant identifier
     const matched = tickets.filter((t: any) => {
