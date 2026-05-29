@@ -34,15 +34,32 @@ export async function GET(request: Request) {
     if (!res.ok) throw new Error(`Ticket error ${res.status}: ${await res.text()}`)
 
     const detail = await res.json()
+    
+    // Return raw transactions for debugging + formatted messages
     const messages = (detail.transactions || [])
-      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note' || tx.type === 'Email')
+      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note' || tx.type === 'Email' || tx.type === 'IncomingMessage')
       .map((tx: any) => ({
         id: tx.id,
         text: tx.text || tx.body || tx.htmlBody?.replace(/<[^>]+>/g, '') || tx.content || '',
-        sender: tx.senderName || tx.userName || tx.fromName || '',
+        sender: tx.senderName || tx.userName || tx.fromName || tx.from || '',
         time: tx.time || tx.createTime,
-        type: tx.senderType === 'Client' ? 'Client' : 'Agent',
+        // Check multiple fields for client detection
+        type: (tx.senderType === 'Client' || tx.senderType === 'client' || 
+               tx.direction === 'Incoming' || tx.direction === 'incoming' ||
+               tx.isClient === true) ? 'Client' : 'Agent',
       }))
+
+    // If no messages, return raw data for debugging
+    if (messages.length === 0) {
+      return NextResponse.json({ 
+        messages: [], 
+        debug: {
+          transactionCount: (detail.transactions || []).length,
+          transactionTypes: Array.from(new Set((detail.transactions || []).map((tx: any) => tx.type as string))),
+          sampleTx: (detail.transactions || []).slice(0, 2)
+        }
+      })
+    }
 
     return NextResponse.json({ messages, subject: detail.subject || detail.field1 || '', status: detail.state })
   } catch (e: any) {

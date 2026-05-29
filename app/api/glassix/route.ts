@@ -44,23 +44,35 @@ async function getTicketList(token: string): Promise<any[]> {
   const until = toGlassixDate(now)
 
   const url = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
-  const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+  
+  let allTickets: any[] = []
+  let currentUrl: string | null = url
 
-  if (res.status === 429) {
-    // Return cached even if expired — better than error
-    if (listCache) return listCache.tickets
-    throw new Error('Rate limit — נסה שוב בעוד דקה')
+  while (currentUrl) {
+    const res = await fetch(currentUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+
+    if (res.status === 429) {
+      if (allTickets.length > 0) break
+      throw new Error('Rate limit — נסה שוב בעוד דקה')
+    }
+    if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
+
+    const data = await res.json()
+    const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+    allTickets = allTickets.concat(tickets)
+
+    // Check for next page
+    const next = data.paging?.next || data.nextPage || null
+    if (next && typeof next === 'string') {
+      currentUrl = next.startsWith('http') ? next : `${BASE_URL}${next.startsWith('/') ? '' : '/'}${next}`
+    } else {
+      currentUrl = null
+    }
+    if (allTickets.length >= 500) break
   }
 
-  if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
-
-  const data = await res.json()
-  // Glassix returns tickets under empty string key ""
-  const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
-
-  // Cache for 5 minutes
-  listCache = { tickets, expires: Date.now() + 5 * 60 * 1000 }
-  return tickets
+  listCache = { tickets: allTickets, expires: Date.now() + 3 * 60 * 1000 }
+  return allTickets
 }
 
 export async function GET(request: Request) {
