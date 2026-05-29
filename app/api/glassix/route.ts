@@ -57,7 +57,7 @@ export async function GET(request: Request) {
 
     // Fetch recent tickets list first
     const now = new Date()
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 864e5)
+    const thirtyDaysAgo = new Date(now.getTime() - 28 * 864e5)
     
     function toGlassixDate(d: Date): string {
       const day = String(d.getDate()).padStart(2, '0')
