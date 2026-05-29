@@ -57,7 +57,7 @@ export async function GET(request: Request) {
 
     // Fetch recent tickets list first
     const now = new Date()
-    const sixMonthsAgo = new Date(now.getTime() - 180 * 864e5)
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 864e5)
     
     function toGlassixDate(d: Date): string {
       const day = String(d.getDate()).padStart(2, '0')
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       return `${day}/${month}/${year} 00:00:00:00`
     }
 
-    const since = toGlassixDate(sixMonthsAgo)
+    const since = toGlassixDate(thirtyDaysAgo)
     const until = toGlassixDate(now).replace('00:00:00:00', '23:59:59:00')
 
     const params = new URLSearchParams({ since, until })
