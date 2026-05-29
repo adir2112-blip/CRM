@@ -35,15 +35,13 @@ export async function GET(request: Request) {
 
     const detail = await res.json()
     const messages = (detail.transactions || [])
-      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note')
+      .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note' || tx.type === 'Email')
       .map((tx: any) => ({
         id: tx.id,
-        text: tx.text || tx.content || '',
-        sender: tx.senderName || tx.userName || '',
+        text: tx.text || tx.body || tx.htmlBody?.replace(/<[^>]+>/g, '') || tx.content || '',
+        sender: tx.senderName || tx.userName || tx.fromName || '',
         time: tx.time || tx.createTime,
         type: tx.senderType === 'Client' ? 'Client' : 'Agent',
-        mediaUrl: tx.fileUri || tx.mediaUrl || null,
-        mediaType: tx.fileType || null
       }))
 
     return NextResponse.json({ messages, subject: detail.subject || detail.field1 || '', status: detail.state })

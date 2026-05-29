@@ -118,16 +118,22 @@ export async function GET(request: Request) {
       debug: {
         totalInMonth: allTickets.length,
         searchPhone: phoneNorm,
-        searchEmail: emailNorm,
-        searchId: idNumber,
-        sampleParticipants: allTickets.slice(0, 5).map((t: any) => ({
-          ticketId: t.id,
-          participants: (t.participants || []).map((p: any) => ({
-            type: p.type,
-            identifier: p.identifier,
-            normalized: normalizePhone(p.identifier || '')
+        channels: allTickets.reduce((acc: any, t: any) => {
+          const ch = t.primaryProtocolType || 'unknown'
+          acc[ch] = (acc[ch] || 0) + 1
+          return acc
+        }, {}),
+        whatsappSample: allTickets
+          .filter((t: any) => t.primaryProtocolType === 'WhatsApp')
+          .slice(0, 3)
+          .map((t: any) => ({
+            id: t.id,
+            participants: (t.participants || []).map((p: any) => ({
+              type: p.type,
+              identifier: p.identifier,
+              protocol: p.protocolType
+            }))
           }))
-        }))
       }
     })
 
