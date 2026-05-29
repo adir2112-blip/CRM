@@ -49,8 +49,10 @@ export async function GET(request: Request) {
     const identifiers: string[] = []
     if (phone) {
       const digits = phone.replace(/\D/g, '')
-      const intl = digits.startsWith('0') ? '972' + digits.slice(1) : digits
-      identifiers.push(intl)
+      const intl = digits.startsWith('0') ? '972' + digits.slice(1) : digits.startsWith('972') ? digits : '972' + digits
+      identifiers.push(intl)           // 972504411096
+      identifiers.push('+' + intl)     // +972504411096
+      identifiers.push('+972 ' + digits.slice(1, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6)) // +972 50 441 1096
       identifiers.push(digits)
     }
     if (email) identifiers.push(email.toLowerCase())
@@ -87,11 +89,12 @@ export async function GET(request: Request) {
       const parts = t.participants || []
       return parts.some((p: any) => {
         if (!p.identifier) return false
-        const pid = p.identifier.replace(/\D/g, '').replace(/^972/, '0')
+        // Normalize both to digits only, remove leading + and 972
+        const pDigits = p.identifier.replace(/\D/g, '').replace(/^972/, '')
         return identifiers.some(id => {
-          const sid = id.replace(/\D/g, '').replace(/^972/, '0')
-          return p.identifier === id ||
-            pid === sid ||
+          const iDigits = id.replace(/\D/g, '').replace(/^972/, '')
+          return pDigits === iDigits || 
+            p.identifier === id ||
             p.identifier.toLowerCase() === id.toLowerCase()
         })
       })
