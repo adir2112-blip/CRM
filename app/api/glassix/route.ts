@@ -23,11 +23,13 @@ async function getToken(): Promise<string> {
   return tokenCache.token
 }
 
-function toGlassixDate(d: Date): string {
+function toGlassixDate(d: Date, endOfDay = false): string {
   const day = String(d.getDate()).padStart(2, '0')
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const year = d.getFullYear()
-  return `${day}/${month}/${year} 00:00:00:00`
+  const h = endOfDay ? '00' : String(d.getHours()).padStart(2, '0')
+  const m = endOfDay ? '00' : String(d.getMinutes()).padStart(2, '0')
+  return `${day}/${month}/${year} ${h}:${m}:00:00`
 }
 
 export async function GET(request: Request) {
@@ -56,8 +58,9 @@ export async function GET(request: Request) {
 
     // Date range — max 1 calendar month
     const now = new Date()
-    const since = toGlassixDate(new Date(now.getFullYear(), now.getMonth(), 1)) // start of this month
-    const until = toGlassixDate(now).replace('00:00:00:00', '23:59:59:00')
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    const since = toGlassixDate(startOfMonth, true)
+    const until = toGlassixDate(now) // current time — never in the future
 
     // Fetch tickets list
     let allTickets: any[] = []
