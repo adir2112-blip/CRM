@@ -30,28 +30,6 @@ function toGlassixDate(d: Date): string {
   return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00:00`
 }
 
-async function fetchPeriod(token: string, from: Date, to: Date): Promise<any[]> {
-  const since = toGlassixDate(from)
-  const until = toGlassixDate(to)
-  let tickets: any[] = []
-  let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed&sortOrder=desc`
-  
-  let pages = 0
-  while (url && pages < 20) {
-    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
-    if (res.status === 429) break
-    if (!res.ok) break
-    const data = await res.json()
-    const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
-    if (batch.length === 0) break
-    tickets = tickets.concat(batch)
-    const next = data.paging?.next || null
-    url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
-    pages++
-  }
-  return tickets
-}
-
 async function getTicketsWithCache(): Promise<any[]> {
   // Check cache
   try {
@@ -68,19 +46,27 @@ async function getTicketsWithCache(): Promise<any[]> {
 
   const token = await getToken()
   const now = new Date()
+  const monthAgo = new Date(now.getTime() - 28 * 864e5)
+  const since = toGlassixDate(monthAgo)
+  const until = toGlassixDate(now)
 
-  // Two parallel fetches: last 15 days + 15-30 days ago
-  const mid = new Date(now.getTime() - 15 * 864e5)
-  const start = new Date(now.getTime() - 30 * 864e5)
+  let allTickets: any[] = []
+  let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
 
-  const [recent, older] = await Promise.all([
-    fetchPeriod(token, mid, now),
-    fetchPeriod(token, start, new Date(mid.getTime() - 1000))
-  ])
+  let pages = 0
+  while (url && pages < 15) {
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    if (res.status === 429) break
+    if (!res.ok) break
+    const data = await res.json()
+    const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+    if (batch.length === 0) break
+    allTickets = allTickets.concat(batch)
+    const next = data.paging?.next || null
+    url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+    pages++
+  }
 
-  const allTickets = [...recent, ...older]
-
-  // Save to cache
   try {
     await supabase.from('glassix_cache').upsert({
       cache_key: CACHE_KEY,
@@ -104,7 +90,6 @@ export async function GET(request: Request) {
     }
 
     const allTickets = await getTicketsWithCache()
-
     const phoneNorm = phone ? phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '') : null
     const emailNorm = email ? email.toLowerCase() : null
 
@@ -123,6 +108,9 @@ export async function GET(request: Request) {
 
     const formatted = matched.slice(0, 20).map((t: any) => {
       const clientPart = (t.participants || []).find((p: any) => p.type === 'Client')
+      const agentPart = (t.participants || []).find((p: any) => 
+        p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט'
+      )
       return {
         id: t.id,
         status: t.state,
@@ -130,7 +118,7 @@ export async function GET(request: Request) {
         subject: t.field1 || '',
         created: t.open,
         updated: t.lastActivity,
-        assignee: t.owner?.fullName || t.owner?.UserName || t.owner?.displayName || '',
+        assignee: agentPart?.displayName || agentPart?.name || t.owner?.fullName || '',
         clientName: clientPart?.name || '',
         clientIdentifier: clientPart?.identifier || '',
         messages: []
