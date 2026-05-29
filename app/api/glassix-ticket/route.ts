@@ -30,139 +30,84 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('id')
-    const debug = searchParams.get('debug') === 'true'
     if (!ticketId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
 
     const token = await getToken()
 
-    // Get ticket for participants
-    const ticketRes = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
+    // Get ticket with full details
+    const res = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     })
 
-    let clientName = ''
-    let agentName = ''
-    let botId = ''
-
-    if (ticketRes.ok) {
-      const ticket = await ticketRes.json()
-      const parts = ticket.participants || []
-      const client = parts.find((p: any) => p.type === 'Client')
-      const bot = parts.find((p: any) => p.userName?.includes('@glassix.bot') || p.name === 'בוט')
-      const agent = parts.find((p: any) => p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט')
-      
-      clientName = client?.name || ''
-      agentName = agent?.displayName || agent?.name || ''
-      botId = bot?.identifier || ''
-    }
-
-    // Get HTML
-    const htmlRes = await fetch(`${BASE_URL}/api/v1.2/tickets/${ticketId}/html`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (!htmlRes.ok) {
+    if (!res.ok) {
       return NextResponse.json({ messages: [] })
     }
 
-    const html = await htmlRes.text()
+    const ticket = await res.json()
+    
+    // Get participant info for sender detection
+    const participants = ticket.participants || []
+    const clientPart = participants.find((p: any) => p.type === 'Client')
+    const agentParts = participants.filter((p: any) => 
+      p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט'
+    )
+    const clientName = clientPart?.name || 'לקוח'
+    const agentName = agentParts[0]?.displayName || agentParts[0]?.name || 'נציג'
+    
+    // Collect agent user IDs
+    const agentUserIds = new Set(agentParts.map((p: any) => p.identifier))
+    const botUserIds = new Set(
+      participants
+        .filter((p: any) => p.userName?.includes('@glassix.bot') || p.name === 'בוט')
+        .map((p: any) => p.identifier)
+    )
 
-    if (debug) {
-      const r = await fetch(`${BASE_URL}/api/v1.2/tickets/get/${ticketId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+    const transactions = ticket.transactions || []
+    
+    const messages = transactions
+      .filter((tx: any) => {
+        const text = tx.text || tx.body || tx.content || ''
+        return text.trim().length > 0 && !isJsonBlob(text.trim())
       })
-      const raw = await r.json()
-      return NextResponse.json({ 
-        status: r.status,
-        keys: Object.keys(raw),
-        transactions: raw.transactions,
-        transactionsCount: raw.transactionsCount,
-        clientName: raw.participants?.find((p: any) => p.type === 'Client')?.name,
-      })
-    }
+      .map((tx: any) => {
+        // Determine sender type
+        const sType = tx.senderType || ''
+        const userId = tx.userId || tx.senderId || ''
+        
+        let type: 'Client' | 'Agent' = 'Client'
+        let sender = clientName
+        
+        if (sType === 'User' || sType === 'Agent' || agentUserIds.has(userId)) {
+          type = 'Agent'
+          // Find agent name by userId
+          const agentPart = agentParts.find((p: any) => p.identifier === userId)
+          sender = agentPart?.displayName || agentPart?.name || agentName
+        } else if (botUserIds.has(userId)) {
+          type = 'Agent' // Bot treated as agent side
+          sender = 'בוט'
+        } else if (sType === 'Client' || sType === 'client') {
+          type = 'Client'
+          sender = clientName
+        }
 
-    // Parse messages from HTML
-    const messages = parseMessages(html, clientName, agentName)
-    return NextResponse.json({ messages, clientName, agentName })
+        return {
+          id: tx.id,
+          text: tx.text || tx.body || tx.content || '',
+          sender,
+          time: tx.time || tx.createTime || tx.timestamp,
+          type,
+        }
+      })
+
+    return NextResponse.json({ 
+      messages,
+      clientName,
+      agentName,
+      subject: ticket.field1 || '',
+      status: ticket.state || ''
+    })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
-}
-
-function parseMessages(html: string, clientName: string, agentName: string): any[] {
-  const messages: any[] = []
-
-  // Extract all transactions from HTML
-  // The transactions from previous response had these patterns:
-  // - Customer messages: messages from the client
-  // - Agent messages: responses from human agent
-  // - Bot/system: menus, JSON blobs
-
-  // Get plain text version
-  const plain = html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<\/td>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&gt;/g, '>')
-    .replace(/&lt;/g, '<')
-    .replace(/&amp;/g, '&')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\r/g, '')
-
-  const lines = plain.split('\n')
-    .map(l => l.trim())
-    .filter(l => l.length > 1 && !isJsonBlob(l))
-
-  // Known bot/system phrases to skip
-  const skipPhrases = [
-    'ברוכים הבאים', 'במה נוכל לעזור', 'אנא הזינו',
-    'חזרה לתפריט', 'מעבר לנציג', 'Closed', 'Open',
-    'Incoming', 'Outgoing', 'Read', 'Delivered'
-  ]
-
-  // Agent phrases (greetings, standard responses)
-  const agentPhrases = [
-    'שמי', 'ואני אטפל', 'איך אוכל לעזור', 'לוקח לזה',
-    'ימי עסקים', 'בשמחה', 'לצערי', 'מדיניות'
-  ]
-
-  // Client phrases  
-  const clientPhrases = [
-    'שלום וברכה', 'ביקשתי', 'עשיתי', 'לא מראה',
-    'אוקי תודה', 'למה כל כך', 'הרבה', 'אוקי.\nתודה'
-  ]
-
-  let id = 0
-  const seen = new Set<string>()
-
-  for (const line of lines) {
-    if (line.length < 2) continue
-    if (skipPhrases.some(p => line.startsWith(p))) continue
-    if (seen.has(line)) continue
-    seen.add(line)
-
-    const isAgent = agentPhrases.some(p => line.includes(p)) || 
-                    (agentName && line.includes(agentName))
-    const isClient = clientPhrases.some(p => line.includes(p)) ||
-                     (clientName && line.includes(clientName))
-
-    // Menu selections (short, 2-10 chars) are client choices
-    const isMenuSelection = line.length <= 15 && !line.includes('\n')
-
-    let msgType: 'Client' | 'Agent' = 'Client'
-    if (isAgent) msgType = 'Agent'
-
-    messages.push({
-      id: id++,
-      text: line,
-      sender: msgType === 'Agent' ? (agentName || 'נציג') : (clientName || 'לקוח'),
-      time: null,
-      type: msgType
-    })
-  }
-
-  return messages
 }

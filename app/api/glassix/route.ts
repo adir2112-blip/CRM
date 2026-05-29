@@ -6,14 +6,13 @@ const BASE_URL = `https://${WORKSPACE}.glassix.com`
 const API_KEY = process.env.GLASSIX_API_KEY!
 const API_SECRET = process.env.GLASSIX_API_SECRET!
 const USERNAME = process.env.GLASSIX_USERNAME!
+const CACHE_KEY = `glassix_tickets_${WORKSPACE}`
+const CACHE_MINUTES = 5
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
-
-const CACHE_KEY = `glassix_tickets_${WORKSPACE}`
-const CACHE_MINUTES = 5
 
 async function getToken(): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
@@ -31,64 +30,64 @@ function toGlassixDate(d: Date): string {
   return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00:00`
 }
 
-async function getTicketsWithCache(): Promise<any[]> {
-  // Check Supabase cache
-  const { data: cached } = await supabase
-    .from('glassix_cache')
-    .select('tickets, updated_at')
-    .eq('cache_key', CACHE_KEY)
-    .single()
-
-  if (cached) {
-    const age = (Date.now() - new Date(cached.updated_at).getTime()) / 1000 / 60
-    if (age < CACHE_MINUTES) {
-      return JSON.parse(cached.tickets)
-    }
+async function fetchPeriod(token: string, from: Date, to: Date): Promise<any[]> {
+  const since = toGlassixDate(from)
+  const until = toGlassixDate(to)
+  let tickets: any[] = []
+  let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed&sortOrder=desc`
+  
+  let pages = 0
+  while (url && pages < 20) {
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    if (res.status === 429) break
+    if (!res.ok) break
+    const data = await res.json()
+    const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+    if (batch.length === 0) break
+    tickets = tickets.concat(batch)
+    const next = data.paging?.next || null
+    url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+    pages++
   }
+  return tickets
+}
 
-  // Fetch fresh from Glassix
+async function getTicketsWithCache(): Promise<any[]> {
+  // Check cache
+  try {
+    const { data: cached } = await supabase
+      .from('glassix_cache')
+      .select('tickets, updated_at')
+      .eq('cache_key', CACHE_KEY)
+      .single()
+    if (cached) {
+      const age = (Date.now() - new Date(cached.updated_at).getTime()) / 60000
+      if (age < CACHE_MINUTES) return JSON.parse(cached.tickets)
+    }
+  } catch {}
+
   const token = await getToken()
   const now = new Date()
-  
-  // Split into two 15-day periods to cover 30 days
-  const period1End = new Date(now)
-  const period1Start = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000)
-  const period2End = new Date(period1Start.getTime() - 1000)
-  const period2Start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-  async function fetchPeriod(from: Date, to: Date): Promise<any[]> {
-    const since = toGlassixDate(from)
-    const until = toGlassixDate(to)
-    let tickets: any[] = []
-    let currentUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed&sortOrder=desc`
-    
-    while (currentUrl) {
-      const res = await fetch(currentUrl, { headers: { 'Authorization': `Bearer ${token}` } })
-      if (res.status === 429) break
-      if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
-      const data = await res.json()
-      const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
-      tickets = tickets.concat(batch)
-      const next = data.paging?.next || null
-      currentUrl = next ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
-      if (tickets.length >= 2000) break
-    }
-    return tickets
-  }
+  // Two parallel fetches: last 15 days + 15-30 days ago
+  const mid = new Date(now.getTime() - 15 * 864e5)
+  const start = new Date(now.getTime() - 30 * 864e5)
 
-  const [period1Tickets, period2Tickets] = await Promise.all([
-    fetchPeriod(period1Start, period1End),
-    fetchPeriod(period2Start, period2End)
+  const [recent, older] = await Promise.all([
+    fetchPeriod(token, mid, now),
+    fetchPeriod(token, start, new Date(mid.getTime() - 1000))
   ])
-  
-  const allTickets = [...period1Tickets, ...period2Tickets]
 
-  // Save to Supabase cache
-  await supabase.from('glassix_cache').upsert({
-    cache_key: CACHE_KEY,
-    tickets: JSON.stringify(allTickets),
-    updated_at: new Date().toISOString()
-  }, { onConflict: 'cache_key' })
+  const allTickets = [...recent, ...older]
+
+  // Save to cache
+  try {
+    await supabase.from('glassix_cache').upsert({
+      cache_key: CACHE_KEY,
+      tickets: JSON.stringify(allTickets),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'cache_key' })
+  } catch {}
 
   return allTickets
 }
@@ -117,10 +116,7 @@ export async function GET(request: Request) {
           if (pNorm === phoneNorm) return true
         }
         if (emailNorm && p.identifier.toLowerCase() === emailNorm) return true
-        if (idNumber) {
-          const idNorm = idNumber.replace(/\D/g, '')
-          if (p.identifier.replace(/\D/g, '') === idNorm) return true
-        }
+        if (idNumber && p.identifier.replace(/\D/g, '') === idNumber.replace(/\D/g, '')) return true
         return false
       })
     })
@@ -134,23 +130,14 @@ export async function GET(request: Request) {
         subject: t.field1 || '',
         created: t.open,
         updated: t.lastActivity,
-        assignee: t.owner?.fullName || t.owner?.UserName || '',
+        assignee: t.owner?.fullName || t.owner?.UserName || t.owner?.displayName || '',
         clientName: clientPart?.name || '',
         clientIdentifier: clientPart?.identifier || '',
         messages: []
       }
     })
 
-    return NextResponse.json({ 
-      total: matched.length, 
-      tickets: formatted,
-      debug: {
-        totalFetched: allTickets.length,
-        phoneNorm,
-        specificTicket: allTickets.find((t:any) => t.id === 227730033) ? 'נמצא ✓' : 'לא נמצא ✗',
-        specificTicketData: allTickets.find((t:any) => t.id === 227730033)
-      }
-    })
+    return NextResponse.json({ total: matched.length, tickets: formatted })
 
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
