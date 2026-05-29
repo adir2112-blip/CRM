@@ -9,9 +9,7 @@ const USERNAME = process.env.GLASSIX_USERNAME!
 let tokenCache: { token: string; expires: number } | null = null
 
 async function getToken(): Promise<string> {
-  if (tokenCache && Date.now() < tokenCache.expires - 300000) {
-    return tokenCache.token
-  }
+  if (tokenCache && Date.now() < tokenCache.expires - 300000) return tokenCache.token
   const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -23,13 +21,14 @@ async function getToken(): Promise<string> {
   return tokenCache.token
 }
 
-function toGlassixDate(d: Date, endOfDay = false): string {
-  const day = String(d.getDate()).padStart(2, '0')
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const year = d.getFullYear()
-  const h = endOfDay ? '00' : String(d.getHours()).padStart(2, '0')
-  const m = endOfDay ? '00' : String(d.getMinutes()).padStart(2, '0')
-  return `${day}/${month}/${year} ${h}:${m}:00:00`
+function toGlassixDate(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00:00`
+}
+
+function normalizePhone(phone: string): string {
+  // Strip everything, remove leading 972 or 0 -> get local digits e.g. 504411096
+  return phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '')
 }
 
 export async function GET(request: Request) {
@@ -40,103 +39,68 @@ export async function GET(request: Request) {
     const idNumber = searchParams.get('id_number')
 
     if (!phone && !email && !idNumber) {
-      return NextResponse.json({ error: 'נדרש טלפון, מייל או ת״ז' }, { status: 400 })
+      return NextResponse.json({ error: 'נדרש פרמטר חיפוש' }, { status: 400 })
     }
 
     const token = await getToken()
 
-    // Build identifiers to search for
-    const identifiers: string[] = []
-    if (phone) {
-      const digits = phone.replace(/\D/g, '')
-      const intl = digits.startsWith('0') ? '972' + digits.slice(1) : digits.startsWith('972') ? digits : '972' + digits
-      identifiers.push(intl)           // 972504411096
-      identifiers.push('+' + intl)     // +972504411096
-      identifiers.push('+972 ' + digits.slice(1, 3) + ' ' + digits.slice(3, 6) + ' ' + digits.slice(6)) // +972 50 441 1096
-      identifiers.push(digits)
-    }
-    if (email) identifiers.push(email.toLowerCase())
-    if (idNumber) identifiers.push(idNumber)
+    const phoneNorm = phone ? normalizePhone(phone) : null
+    const emailNorm = email ? email.toLowerCase() : null
 
-    // Date range — max 1 calendar month
+    // Date range — current month in UTC
     const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    const since = toGlassixDate(startOfMonth, true)
-    const until = toGlassixDate(now) // current time — never in the future
+    const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0))
+    const since = toGlassixDate(startOfMonth)
+    const until = toGlassixDate(now)
 
-    // Fetch tickets list
+    // Fetch all tickets for the month (participants ARE included per Glassix docs)
     let allTickets: any[] = []
     let nextUrl: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
 
     while (nextUrl) {
-      const res = await fetch(nextUrl, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (!res.ok) {
-        const err = await res.text()
-        throw new Error(`Glassix list ${res.status}: ${err}`)
-      }
+      const res = await fetch(nextUrl, { headers: { 'Authorization': `Bearer ${token}` } })
+      if (!res.ok) throw new Error(`Glassix list ${res.status}: ${await res.text()}`)
       const data = await res.json()
-      const tickets = Array.isArray(data) ? data : (data.tickets || data.data || [])
+      // Glassix returns tickets under empty string key ""
+      const tickets = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
       allTickets = allTickets.concat(tickets)
-      // Handle pagination
       nextUrl = data.paging?.next || null
-      if (allTickets.length > 500) break // safety
+      if (allTickets.length > 1000) break
     }
 
-    // Filter by participant identifier
+    // Filter by participant identifier using normalized phone
     const matched = allTickets.filter((t: any) => {
-      const parts = t.participants || []
+      const parts: any[] = t.participants || []
       return parts.some((p: any) => {
+        if (p.type !== 'Client') return false
         if (!p.identifier) return false
-        // Normalize both to digits only, remove leading + and 972
-        const pDigits = p.identifier.replace(/\D/g, '').replace(/^972/, '')
-        return identifiers.some(id => {
-          const iDigits = id.replace(/\D/g, '').replace(/^972/, '')
-          return pDigits === iDigits || 
-            p.identifier === id ||
-            p.identifier.toLowerCase() === id.toLowerCase()
-        })
+        // Compare normalized phones
+        if (phoneNorm) {
+          const pNorm = normalizePhone(p.identifier)
+          if (pNorm === phoneNorm) return true
+        }
+        if (emailNorm && p.identifier.toLowerCase() === emailNorm) return true
+        if (idNumber && p.identifier === idNumber) return true
+        return false
       })
     })
 
-    // Format for display (no messages in list — fetch separately for top 5)
-    const formatted = await Promise.all(matched.slice(0, 10).map(async (t: any) => {
-      // Get ticket details with transactions
-      let messages: any[] = []
-      try {
-        const detailRes = await fetch(`${BASE_URL}/api/v1.2/tickets/${t.id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        if (detailRes.ok) {
-          const detail = await detailRes.json()
-          messages = (detail.transactions || [])
-            .filter((tx: any) => tx.type === 'Message' || tx.type === 'Note')
-            .slice(-5)
-            .map((tx: any) => ({
-              id: tx.id,
-              text: tx.text || tx.content || '',
-              sender: tx.senderName || tx.userName || '',
-              time: tx.time || tx.createTime,
-              type: tx.senderType === 'Client' ? 'Client' : 'Agent'
-            }))
-        }
-      } catch {}
-
+    // Format results — no extra API calls needed (no messages from list, that's ok)
+    const formatted = matched.slice(0, 20).map((t: any) => {
+      const clientPart = (t.participants || []).find((p: any) => p.type === 'Client')
       return {
         id: t.id,
-        status: t.status,
-        channel: t.protocolType || t.channelType || 'WhatsApp',
-        subject: t.subject || '',
-        created: t.open || t.createTime,
-        updated: t.lastActivity || t.updateTime,
-        assignee: t.ownerName || t.assignee?.name || '',
-        participants: (t.participants || [])
-          .filter((p: any) => p.type === 'Client')
-          .map((p: any) => ({ name: p.name, identifier: p.identifier })),
-        messages
+        status: t.state,
+        channel: t.primaryProtocolType || 'WhatsApp',
+        subject: t.field1 || t.subject || '',
+        created: t.open,
+        updated: t.lastActivity,
+        assignee: t.owner?.fullName || t.owner?.UserName || '',
+        clientName: clientPart?.name || '',
+        clientIdentifier: clientPart?.identifier || '',
+        messages: [] // messages require separate call — skipped to avoid rate limit
       }
-    }))
+    })
 
     return NextResponse.json({ total: matched.length, tickets: formatted })
 
