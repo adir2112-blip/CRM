@@ -249,8 +249,16 @@ function DashboardPage() {
     })
     setSmartLoading(false)
   }
-  const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
-  const isAdmin = profile?.role === 'admin'
+  const [showSLAPopup, setShowSLAPopup] = useState(false)
+
+  useEffect(() => {
+    if (!profile || isAdmin) return
+    // Show SLA popup after cases load if there are overdue
+    const timer = setTimeout(() => {
+      if (overdueCases.length > 0) setShowSLAPopup(true)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [cases, profile])
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
   function showList(title: string, list: any[]) { setModalTitle(title); setModalList(list); setShowListModal(true) }
@@ -1095,7 +1103,40 @@ function DashboardPage() {
         </div>
       )}
 
-      {/* List modal */}
+      {/* SLA Popup for agent */}
+      {showSLAPopup && !isAdmin && overdueCases.length > 0 && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.6)', zIndex:400, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'#fff', borderRadius:16, padding:28, width:480, maxWidth:'95vw', boxShadow:'0 24px 64px rgba(0,0,0,0.25)', border:'3px solid #dc2626' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
+              <span style={{ fontSize:32 }}>🚨</span>
+              <div>
+                <div style={{ fontSize:18, fontWeight:800, color:'#dc2626' }}>טיפול דחוף נדרש!</div>
+                <div style={{ fontSize:13, color:'#6b7280', marginTop:2 }}>יש לך {overdueCases.length} פניות שחרגו מ-2 ימי עסקים</div>
+              </div>
+            </div>
+            <div style={{ maxHeight:240, overflowY:'auto', marginBottom:16 }}>
+              {overdueCases.map((c: any) => (
+                <div key={c.id} onClick={() => { setShowSLAPopup(false); openCase(c) }}
+                  style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 12px', background:'#fff5f5', borderRadius:8, marginBottom:8, cursor:'pointer', border:'1px solid #fca5a5' }}
+                  onMouseEnter={e => (e.currentTarget.style.background='#fee2e2')}
+                  onMouseLeave={e => (e.currentTarget.style.background='#fff5f5')}>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:13 }}>{c.customer_name}</div>
+                    <div style={{ fontSize:11, color:'#9ca3af' }}>{c.cat1_name}{c.cat2_name?' › '+c.cat2_name:''}</div>
+                  </div>
+                  <div style={{ textAlign:'left' }}>
+                    <div style={{ fontSize:13, fontWeight:900, color:'#dc2626' }}>{businessDaysBetween(new Date(c.updated_at), new Date())} ימים</div>
+                    <div style={{ fontSize:10, color:'#9ca3af' }}>לחץ לטיפול</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button onClick={() => setShowSLAPopup(false)} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#059669,#10b981)', color:'#fff', fontSize:14, fontWeight:700, cursor:'pointer', fontFamily:'Heebo,sans-serif' }}>
+              קיבלתי — אטפל עכשיו
+            </button>
+          </div>
+        </div>
+      )}
       {showListModal && (
         <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setShowListModal(false) }}>
           <div className="modal">

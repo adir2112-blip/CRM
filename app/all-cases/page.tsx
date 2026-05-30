@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import Topbar from '@/components/Topbar'
+import TransferCaseModal from '@/components/TransferCaseModal'
 import { fmt, statusBadgeClass, isOverdue } from '@/lib/utils'
 
 function GlassixItem({ ticket: t }: { ticket: any }) {
@@ -78,7 +79,7 @@ export default function AllCasesAgentPage() {
   const [glassixLoading, setGlassixLoading] = useState(false)
   const [glassixTotal, setGlassixTotal] = useState(0)
   const [glassixError, setGlassixError] = useState('')
-  const [toast, setToast] = useState('')
+  const [transferCase, setTransferCase] = useState<any>(null)
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
@@ -234,7 +235,10 @@ export default function AllCasesAgentPage() {
         <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setSelectedCase(null) }}>
           <div className="modal">
             <div className="modal-header">
-              <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                <div className="modal-title">פניה #{selectedCase.id} — {selectedCase.customer_name}</div>
+                <button className="btn btn-xs" style={{ background:'#eff4ff', color:'#2563eb', border:'1px solid #bfdbfe' }} onClick={() => setTransferCase(selectedCase)}>🔄 העבר לנציג</button>
+              </div>
               <button className="close-btn" onClick={() => setSelectedCase(null)}>✕</button>
             </div>
             <div className="tabs">
@@ -336,6 +340,17 @@ export default function AllCasesAgentPage() {
             )}
           </div>
         </div>
+      )}
+      {transferCase && (
+        <TransferCaseModal
+          caseId={transferCase.id}
+          currentAgentName={transferCase.agent_name || ''}
+          onClose={() => setTransferCase(null)}
+          onTransferred={() => {
+            supabase.from('cases').select('*').order('updated_at', { ascending: false }).then(({ data }) => setCases(data || []))
+            showToast('פניה הועברה ✓')
+          }}
+        />
       )}
       {toast && <div className="toast">{toast}</div>}
     </>

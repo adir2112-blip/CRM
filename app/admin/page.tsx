@@ -7,7 +7,125 @@ import * as XLSX from 'xlsx'
 
 const SUPER_ADMIN = 'adir2112@gmail.com'
 
-function AgentStatsTab() {
+function OnlineUsersTab() {
+  const supabase = createClient()
+  const [sessions, setSessions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    setLoading(true)
+    // Consider active if last_ping within 10 minutes
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const today = new Date().toISOString().split('T')[0]
+    const { data } = await supabase
+      .from('user_sessions')
+      .select('*')
+      .gte('login_at', today)
+      .order('login_at', { ascending: false })
+    setSessions(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
+
+  function fmt(d: string) {
+    return new Date(d).toLocaleString('he-IL', { timeZone:'Asia/Jerusalem', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })
+  }
+
+  function duration(login: string, logout?: string) {
+    const from = new Date(login)
+    const to = logout ? new Date(logout) : new Date()
+    const mins = Math.round((to.getTime() - from.getTime()) / 60000)
+    if (mins < 60) return `${mins} דק'`
+    return `${Math.floor(mins/60)}:${String(mins%60).padStart(2,'0')} ש'`
+  }
+
+  const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+  const active = sessions.filter(s => s.is_active && s.last_ping > tenMinAgo)
+  const inactive = sessions.filter(s => !s.is_active || s.last_ping <= tenMinAgo)
+
+  // Group by user for total hours
+  const byUser: Record<string, number> = {}
+  sessions.forEach(s => {
+    const mins = Math.round((new Date(s.logout_at || new Date()).getTime() - new Date(s.login_at).getTime()) / 60000)
+    byUser[s.user_name] = (byUser[s.user_name] || 0) + mins
+  })
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>🟢 משתמשים מחוברים היום</div>
+        <button className="btn btn-xs" onClick={load}>🔄 רענן</button>
+      </div>
+
+      {/* Active now */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'#15803d', marginBottom:8 }}>פעילים כרגע ({active.length})</div>
+        <div className="card" style={{ padding:0 }}>
+          <table>
+            <thead><tr><th>נציג</th><th>ארגון</th><th>התחבר</th><th>זמן מחובר</th><th>Ping אחרון</th></tr></thead>
+            <tbody>
+              {active.length === 0 ? <tr><td colSpan={5} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין משתמשים פעילים</td></tr>
+              : active.map(s => (
+                <tr key={s.id}>
+                  <td>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <span style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', display:'inline-block' }} />
+                      <span style={{ fontWeight:600 }}>{s.user_name}</span>
+                    </div>
+                  </td>
+                  <td style={{ fontSize:12, color:'var(--text3)' }}>{s.org_names || '—'}</td>
+                  <td style={{ fontSize:12 }}>{fmt(s.login_at)}</td>
+                  <td style={{ fontSize:12, fontWeight:600, color:'#059669' }}>{duration(s.login_at)}</td>
+                  <td style={{ fontSize:11, color:'var(--text3)' }}>{fmt(s.last_ping)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Today's sessions */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8 }}>כל הסשנים היום ({sessions.length})</div>
+        <div className="card" style={{ padding:0 }}>
+          <table>
+            <thead><tr><th>נציג</th><th>התחבר</th><th>התנתק</th><th>משך</th></tr></thead>
+            <tbody>
+              {sessions.map(s => (
+                <tr key={s.id} style={{ opacity: s.is_active && s.last_ping > tenMinAgo ? 1 : 0.6 }}>
+                  <td>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ width:8, height:8, borderRadius:'50%', background: s.is_active && s.last_ping > tenMinAgo ? '#10b981' : '#94a3b8', display:'inline-block' }} />
+                      {s.user_name}
+                    </div>
+                  </td>
+                  <td style={{ fontSize:12 }}>{fmt(s.login_at)}</td>
+                  <td style={{ fontSize:12, color:'var(--text3)' }}>{s.logout_at ? fmt(s.logout_at) : '—'}</td>
+                  <td style={{ fontSize:12, fontWeight:600 }}>{duration(s.login_at, s.logout_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Summary by user */}
+      <div>
+        <div style={{ fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8 }}>סיכום שעות היום</div>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          {Object.entries(byUser).map(([name, mins]) => (
+            <div key={name} style={{ background:'var(--bg3)', borderRadius:10, padding:'10px 16px', border:'1px solid var(--border)', textAlign:'center' }}>
+              <div style={{ fontWeight:700, fontSize:13 }}>{name}</div>
+              <div style={{ fontSize:18, fontWeight:900, color:'#2563eb', marginTop:4 }}>{Math.floor(mins/60)}:{String(mins%60).padStart(2,'0')}</div>
+              <div style={{ fontSize:10, color:'var(--text3)' }}>שעות</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
   const supabase = createClient()
   const [stats, setStats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,6 +189,87 @@ function AgentStatsTab() {
             <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} style={{ width:150 }} />
           </>
         }
+        <select className="form-input" value={orgFilter} onChange={e => setOrgFilter(e.target.value)} style={{ width:180, fontSize:12 }}>
+          <option value="">כל הארגונים</option>
+          {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
+      </div>
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div> : (
+        <div className="card" style={{ padding:0 }}>
+          <table>
+            <thead><tr><th>נציג</th><th style={{ textAlign:'center' }}>סה"כ פניות</th><th style={{ textAlign:'center' }}>טופלו</th><th style={{ textAlign:'center' }}>אחוז טיפול</th></tr></thead>
+            <tbody>
+              {stats.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לתקופה זו</td></tr>
+              : stats.map((s: any) => (
+                <tr key={s.name}>
+                  <td style={{ fontWeight:600 }}>{s.name}</td>
+                  <td style={{ textAlign:'center' }}><span className="badge b-blue">{s.total}</span></td>
+                  <td style={{ textAlign:'center' }}><span className="badge b-green">{s.closed}</span></td>
+                  <td style={{ textAlign:'center' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <div style={{ flex:1, height:8, background:'#e5e7eb', borderRadius:4, overflow:'hidden' }}>
+                        <div style={{ width:`${Math.round(s.closed/s.total*100)}%`, height:'100%', background:'#10b981', borderRadius:4 }} />
+                      </div>
+                      <span style={{ fontSize:12, fontWeight:700, color:'#059669', minWidth:36 }}>{Math.round(s.closed/s.total*100)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AgentStatsTab() {
+  const supabase = createClient()
+  const [stats, setStats] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterType, setFilterType] = useState<'month'|'range'>('month')
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [orgFilter, setOrgFilter] = useState('')
+  const [orgs, setOrgs] = useState<any[]>([])
+
+  useEffect(() => {
+    supabase.from('organizations').select('id,name').order('name').then(({ data }) => setOrgs(data || []))
+  }, [])
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      let from: string, to: string
+      if (filterType === 'month') { from = month + '-01'; to = month + '-31' }
+      else { if (!fromDate || !toDate) { setLoading(false); return }; from = fromDate; to = toDate }
+      let query = supabase.from('cases').select('agent_name, status_name, created_at').gte('created_at', from).lte('created_at', to + 'T23:59:59')
+      if (orgFilter) query = query.eq('org_id', orgFilter)
+      const { data } = await query
+      const byAgent: Record<string, any> = {}
+      ;(data || []).forEach((c: any) => {
+        if (!c.agent_name) return
+        if (!byAgent[c.agent_name]) byAgent[c.agent_name] = { name: c.agent_name, total: 0, closed: 0 }
+        byAgent[c.agent_name].total++
+        if (c.status_name?.includes('טופל')) byAgent[c.agent_name].closed++
+      })
+      setStats(Object.values(byAgent).sort((a: any, b: any) => b.total - a.total))
+      setLoading(false)
+    }
+    load()
+  }, [month, fromDate, toDate, orgFilter, filterType])
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16, flexWrap:'wrap' }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>📊 סטטיסטיקות נציגים</div>
+        <div style={{ display:'flex', gap:4 }}>
+          <button className={`btn btn-sm${filterType==='month'?' btn-primary':''}`} onClick={() => setFilterType('month')}>לפי חודש</button>
+          <button className={`btn btn-sm${filterType==='range'?' btn-primary':''}`} onClick={() => setFilterType('range')}>טווח תאריכים</button>
+        </div>
+        {filterType === 'month' ? <input type="month" className="form-input" value={month} onChange={e => setMonth(e.target.value)} style={{ width:160 }} />
+        : <><input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} style={{ width:150 }} /><span style={{ fontSize:12, color:'var(--text3)' }}>—</span><input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} style={{ width:150 }} /></>}
         <select className="form-input" value={orgFilter} onChange={e => setOrgFilter(e.target.value)} style={{ width:180, fontSize:12 }}>
           <option value="">כל הארגונים</option>
           {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -445,7 +644,7 @@ export default function AdminPage() {
       <div style={{ padding: '22px 26px' }}>
         <div className="page-header"><div className="page-title">ניהול מערכת</div></div>
         <div className="tabs">
-          {[['users','משתמשים'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']].map(([k,v]) => (
+          {[['users','משתמשים'],['online','🟢 מחוברים'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']].map(([k,v]) => (
             <div key={k} className={`tab${tab===k?' active':''}`} onClick={() => setTab(k)}>{v}</div>
           ))}
         </div>
@@ -709,6 +908,8 @@ export default function AdminPage() {
           </div>
         )}
 
+        {tab === 'online' && <OnlineUsersTab />}
+
         {tab === 'agent-stats' && (
           <AgentStatsTab />
         )}
@@ -770,4 +971,5 @@ export default function AdminPage() {
     </>
   )
 
+}
 }

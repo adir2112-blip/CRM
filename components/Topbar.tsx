@@ -43,6 +43,46 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     if (userName) checkReminders()
   }, [userName])
 
+  // Session tracking
+  useEffect(() => {
+    if (!userName || !userEmail) return
+    let sessionId: string | null = null
+
+    async function startSession() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data: prof } = await supabase.from('profiles').select('full_name, allowed_orgs').eq('id', user.id).single()
+      let orgNames = ''
+      if (prof?.allowed_orgs?.length > 0) {
+        const { data: orgs } = await supabase.from('organizations').select('name').in('id', prof.allowed_orgs)
+        orgNames = (orgs || []).map((o: any) => o.name).join(', ')
+      }
+      const { data } = await supabase.from('user_sessions').insert({
+        user_id: user.id, user_name: prof?.full_name || userName,
+        user_email: userEmail, org_names: orgNames, is_active: true
+      }).select('id').single()
+      if (data) { sessionId = data.id; localStorage.setItem('crm_session_id', data.id) }
+    }
+
+    async function ping() {
+      const sid = sessionId || localStorage.getItem('crm_session_id')
+      if (sid) await supabase.from('user_sessions').update({ last_ping: new Date().toISOString() }).eq('id', sid)
+    }
+
+    async function endSession() {
+      const sid = sessionId || localStorage.getItem('crm_session_id')
+      if (sid) {
+        await supabase.from('user_sessions').update({ logout_at: new Date().toISOString(), is_active: false }).eq('id', sid)
+        localStorage.removeItem('crm_session_id')
+      }
+    }
+
+    startSession()
+    const pingInterval = setInterval(ping, 5 * 60 * 1000)
+    window.addEventListener('beforeunload', endSession)
+    return () => { clearInterval(pingInterval); window.removeEventListener('beforeunload', endSession) }
+  }, [userName, userEmail])
+
   async function doSearch(q: string) {
     setSearchQ(q)
     if (!q.trim()) { setResults([]); setShowResults(false); return }
