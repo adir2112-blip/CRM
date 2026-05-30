@@ -119,7 +119,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
       <div className="topbar">
         <div className="topbar-brand"><span className="brand-dot" />CRM</div>
         <Link href="/dashboard" className={`nav-btn${pathname === '/dashboard' ? ' active' : ''}`}>🏠 ראשי</Link>
-        <Link href="/analytics" className={`nav-btn${pathname === '/analytics' ? ' active' : ''}`}>🎯 דשבורד</Link>
+        {isAdmin && <Link href="/analytics" className={`nav-btn${pathname === '/analytics' ? ' active' : ''}`}>🎯 דשבורד</Link>}
         <Link href="/new-case" style={{
           display:'inline-flex', alignItems:'center', padding:'6px 14px', borderRadius:8,
           background:'linear-gradient(135deg,#059669,#10b981)', color:'#fff',
@@ -151,7 +151,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
                     onMouseLeave={e => (e.currentTarget.style.background='#fff')}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                       <span style={{ fontWeight:600, fontSize:13, color:'#111827' }}>{c.customer_name}</span>
-                      <span style={{ fontSize:10, color:'#9ca3af', fontWeight:700 }}>{relativeTime(c.updated_at)}</span>
+                      <span style={{ fontSize:12, color:'#2563eb', fontWeight:800 }}>{relativeTime(c.updated_at)}</span>
                     </div>
                     <div style={{ display:'flex', gap:8, marginTop:3, alignItems:'center' }}>
                       <span style={{ fontSize:11, color:'#6b7280', direction:'ltr' }}>{c.phone}</span>

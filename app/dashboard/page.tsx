@@ -591,6 +591,47 @@ function DashboardPage() {
             <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>לא נמצא לקוח עם פרטים אלו</div>
           )}
         </div>
+        {/* Agent SLA section */}
+        {!isAdmin && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+            {/* SLA counter card */}
+            <div className="card card-pad" style={{ textAlign:'center' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#dc2626', marginBottom:8 }}>🔴 חריגת SLA</div>
+              <div style={{ fontSize:48, fontWeight:900, color: overdueCases.length > 0 ? '#dc2626' : '#10b981', lineHeight:1 }}>{overdueCases.length}</div>
+              <div style={{ fontSize:12, color:'var(--text3)', marginTop:6 }}>פניות שחרגו מ-2 ימי עסקים</div>
+              {overdueCases.length > 0 && (
+                <button className="btn btn-xs" style={{ marginTop:10, background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5' }} onClick={() => showList('חריגת SLA', overdueCases)}>הצג הכל</button>
+              )}
+            </div>
+            {/* SLA list card */}
+            <div className="card">
+              <div className="card-header">
+                <div className="card-title" style={{ color:'#dc2626' }}>📋 רשימת חריגות</div>
+                <span className="badge b-red">{overdueCases.length}</span>
+              </div>
+              <div style={{ padding:'10px 14px', maxHeight:220, overflowY:'auto' }}>
+                {overdueCases.length === 0
+                  ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>✅ אין חריגות כרגע</div>
+                  : overdueCases.map((c: any) => (
+                    <div key={c.id} onClick={() => openCase(c)} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', cursor:'pointer', borderBottom:'1px solid var(--border)' }}
+                      onMouseEnter={e => (e.currentTarget.style.background='#fef2f2')}
+                      onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:600, fontSize:13 }}>{c.customer_name}</div>
+                        <div style={{ fontSize:11, color:'var(--text3)' }}>{c.cat1_name}{c.cat2_name?' › '+c.cat2_name:''}</div>
+                      </div>
+                      <div style={{ textAlign:'left' }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:'#dc2626' }}>{businessDaysBetween(new Date(c.updated_at), new Date())} ימים</div>
+                        <div style={{ fontSize:10, color:'var(--text3)' }}>{relativeTime(c.updated_at)}</div>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Admin panels */}
         {isAdmin && (
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16, marginBottom:16 }}>
