@@ -1043,10 +1043,7 @@ function DashboardPage() {
                 <tbody>
                   {recurringModal.cases.map(c => {
                     const samePhone = cases.filter(x => x.phone && x.phone === c.phone)
-                    const digitalCount = samePhone.filter(x => 
-                      x.cat1_name?.includes('דיגיטל') || x.cat2_name?.includes('דיגיטל') || 
-                      x.cat1_name?.includes('אפליקציה') || x.cat2_name?.includes('אפליקציה')
-                    ).length
+                    const digitalCount = samePhone.length
                     return (
                       <tr key={c.id} style={{ cursor:'pointer' }} onClick={() => { setRecurringModal(null); openCase(c) }}>
                         <td className="td-muted">#{c.id}</td>
@@ -1058,7 +1055,7 @@ function DashboardPage() {
                         <td style={{ color:'var(--text2)' }}>{c.agent_name}</td>
                         <td className="td-muted" style={{ whiteSpace:'nowrap', fontSize:11 }}>{fmt(c.created_at)}</td>
                         <td style={{ textAlign:'center' }}>
-                          {digitalCount > 0 ? <span className="badge b-blue">{digitalCount}</span> : <span style={{ color:'var(--text3)', fontSize:11 }}>—</span>}
+                          <span className="badge b-blue">{digitalCount}</span>
                         </td>
                       </tr>
                     )

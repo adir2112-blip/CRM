@@ -101,18 +101,36 @@ export default function AgentsStatusPage() {
           <div className="page-title">👥 בטיפול נציגים</div>
         </div>
 
-        {/* Available agents */}
+        {/* Available agents table */}
         {(() => {
           const busyIds = new Set(agentStats.filter(a => a.totalCases > 0).map(a => a.id))
           const available = agents.filter(a => !busyIds.has(a.id))
           if (available.length === 0) return null
           return (
-            <div style={{ marginBottom:16, padding:'12px 16px', background:'#f0fdf4', borderRadius:10, border:'1px solid #86efac' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#15803d', marginBottom:8 }}>✅ נציגים פנויים ({available.length})</div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                {available.map(a => (
-                  <span key={a.id} style={{ fontSize:12, padding:'4px 12px', borderRadius:999, background:'#dcfce7', color:'#15803d', fontWeight:600 }}>{a.full_name}</span>
-                ))}
+            <div className="card card-pad" style={{ marginBottom:16 }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#15803d' }}>✅ נציגים פנויים ({available.length})</div>
+              </div>
+              <div className="card" style={{ padding:0 }}>
+                <table>
+                  <thead><tr><th>שם נציג</th><th>אימייל</th><th>תפקיד</th></tr></thead>
+                  <tbody>
+                    {available.map(a => (
+                      <tr key={a.id} style={{ background:'#f0fdf4' }}>
+                        <td style={{ fontWeight:600 }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <div style={{ width:28, height:28, borderRadius:'50%', background:'#10b981', color:'#fff', fontSize:11, fontWeight:700, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                              {a.full_name.split(' ').map((p:string)=>p[0]).join('').slice(0,2)}
+                            </div>
+                            {a.full_name}
+                          </div>
+                        </td>
+                        <td style={{ fontSize:12, color:'var(--text3)' }}>{a.email}</td>
+                        <td><span className={`badge ${a.role==='admin'?'b-purple':'b-blue'}`}>{a.role==='admin'?'מנהל':'נציג'}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )

@@ -11,17 +11,37 @@ function AgentStatsTab() {
   const supabase = createClient()
   const [stats, setStats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [filterType, setFilterType] = useState<'month'|'range'>('month')
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [orgFilter, setOrgFilter] = useState('')
+  const [orgs, setOrgs] = useState<any[]>([])
+
+  useEffect(() => {
+    supabase.from('organizations').select('id,name').order('name').then(({ data }) => setOrgs(data || []))
+  }, [])
 
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const from = month + '-01'
-      const to = month + '-31'
-      const { data } = await supabase.from('cases')
-        .select('agent_id, agent_name, status_name, created_at')
-        .gte('created_at', from).lte('created_at', to)
-      
+      let from: string, to: string
+      if (filterType === 'month') {
+        from = month + '-01'
+        to = month + '-31'
+      } else {
+        if (!fromDate || !toDate) { setLoading(false); return }
+        from = fromDate
+        to = toDate
+      }
+
+      let query = supabase.from('cases')
+        .select('agent_id, agent_name, status_name, created_at, org_id, org_name')
+        .gte('created_at', from).lte('created_at', to + 'T23:59:59')
+
+      if (orgFilter) query = query.eq('org_id', orgFilter)
+
+      const { data } = await query
       const byAgent: Record<string, any> = {}
       ;(data || []).forEach((c: any) => {
         if (!c.agent_name) return
@@ -33,20 +53,35 @@ function AgentStatsTab() {
       setLoading(false)
     }
     load()
-  }, [month])
+  }, [month, fromDate, toDate, orgFilter, filterType])
 
   return (
     <div>
-      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16, flexWrap:'wrap' }}>
         <div style={{ fontSize:13, fontWeight:700 }}>📊 סטטיסטיקות נציגים</div>
-        <input type="month" className="form-input" value={month} onChange={e => setMonth(e.target.value)} style={{ width:160 }} />
+        <div style={{ display:'flex', gap:4 }}>
+          <button className={`btn btn-sm${filterType==='month'?' btn-primary':''}`} onClick={() => setFilterType('month')}>לפי חודש</button>
+          <button className={`btn btn-sm${filterType==='range'?' btn-primary':''}`} onClick={() => setFilterType('range')}>טווח תאריכים</button>
+        </div>
+        {filterType === 'month'
+          ? <input type="month" className="form-input" value={month} onChange={e => setMonth(e.target.value)} style={{ width:160 }} />
+          : <>
+            <input type="date" className="form-input" value={fromDate} onChange={e => setFromDate(e.target.value)} style={{ width:150 }} />
+            <span style={{ fontSize:12, color:'var(--text3)' }}>—</span>
+            <input type="date" className="form-input" value={toDate} onChange={e => setToDate(e.target.value)} style={{ width:150 }} />
+          </>
+        }
+        <select className="form-input" value={orgFilter} onChange={e => setOrgFilter(e.target.value)} style={{ width:180, fontSize:12 }}>
+          <option value="">כל הארגונים</option>
+          {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </select>
       </div>
       {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div> : (
         <div className="card" style={{ padding:0 }}>
           <table>
             <thead><tr><th>נציג</th><th style={{ textAlign:'center' }}>סה"כ פניות</th><th style={{ textAlign:'center' }}>טופלו</th><th style={{ textAlign:'center' }}>אחוז טיפול</th></tr></thead>
             <tbody>
-              {stats.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לחודש זה</td></tr>
+              {stats.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לתקופה זו</td></tr>
               : stats.map((s: any) => (
                 <tr key={s.name}>
                   <td style={{ fontWeight:600 }}>{s.name}</td>
@@ -240,6 +275,7 @@ export default function AdminPage() {
     setAddingUser(false)
     setNewUser({ email: '', password: '', full_name: '', role: 'agent' })
     setNewUserOrgs([])
+    await logActivity(`הוסיף משתמש חדש: ${newUser.full_name} (${newUser.role})`, newUser.email)
     showToast('משתמש נוסף ✓')
     loadUsers()
   }
@@ -247,6 +283,7 @@ export default function AdminPage() {
   async function saveUserOrgs() {
     if (!editingUserOrgs) return
     await supabase.from('profiles').update({ allowed_orgs: editUserOrgsList.length > 0 ? editUserOrgsList : null }).eq('id', editingUserOrgs.id)
+    await logActivity(`עדכן מחלקות מורשות`, editingUserOrgs.full_name)
     setEditingUserOrgs(null)
     loadUsers()
     showToast('מחלקות עודכנו ✓')
@@ -288,6 +325,7 @@ export default function AdminPage() {
     })
     const data = await res.json()
     if (data.error) { alert('שגיאה: ' + data.error); return }
+    await logActivity('איפס סיסמא', resetPassUser.full_name)
     setResetPassUser(null)
     setNewPass('')
     showToast('סיסמא עודכנה ✓')
@@ -295,12 +333,16 @@ export default function AdminPage() {
 
   async function deleteUser(id: string) {
     if (!confirm('להשבית משתמש?')) return
+    const u = users.find(x => x.id === id)
     await supabase.from('profiles').update({ active: false }).eq('id', id)
+    await logActivity('השבית משתמש', u?.full_name || id)
     loadUsers()
   }
   async function hardDeleteUser(id: string) {
     if (!confirm('למחוק משתמש לחלוטין? הפניות שלו יישארו')) return
+    const u = users.find(x => x.id === id)
     await supabase.from('profiles').delete().eq('id', id)
+    await logActivity('מחק משתמש לחלוטין', u?.full_name || id)
     loadUsers()
     showToast('משתמש נמחק ✓')
   }

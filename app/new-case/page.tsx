@@ -322,7 +322,7 @@ export default function NewCasePage() {
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
                   <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', padding: '11px 24px', borderRadius: 10, background: '#fff', color: '#475569', fontSize: 14, fontWeight: 600, textDecoration: 'none', fontFamily: 'Heebo, sans-serif', border: '1.5px solid #e2e8f0' }}>ביטול</a>
-                  <button type="submit" disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 36px', borderRadius: 10, border: 'none', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #1d4ed8, #7c3aed)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Heebo, sans-serif', boxShadow: saving ? 'none' : '0 4px 18px rgba(37,99,235,0.35)', letterSpacing: '0.3px' }}>
+                  <button type="submit" disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 36px', borderRadius: 10, border: 'none', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Heebo, sans-serif', boxShadow: saving ? 'none' : '0 4px 18px rgba(5,150,105,0.35)', letterSpacing: '0.3px' }}>
                     {saving ? '⏳ שומר...' : '💾 שמור פניה'}
                   </button>
                 </div>
