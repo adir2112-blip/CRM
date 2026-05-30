@@ -448,9 +448,11 @@ function DashboardPage() {
   })
   const allIP = myCases.filter(c => c.status_name === 'בטיפול נציג')
   const filteredIP = allIP.filter(c => rangeFilter(c, ipFilter))
-  const overdueCases = myCases.filter(c => isOverdue(c))
-  const mgrWait = cases.filter(c => isMgrWaitOverdue(c))
-  const mgrActive = cases.filter(c => isMgrActiveOverdue(c))
+  const overdueCases = isAdmin 
+    ? cases.filter(c => isOverdue(c))
+    : myCases.filter(c => isOverdue(c))
+  const mgrWait = cases.filter(c => c.status_name === 'ממתין לשיחת מנהל' || c.status_name === 'הועבר לשיחת מנהל')
+  const mgrActive = cases.filter(c => c.status_name === 'בטיפול בשיחת מנהל' || c.status_name === 'בטיפול לאחר שיחת מנהל')
   const doneMine = myCases.filter(c => c.status_name?.includes('טופל')).length
   const h = new Date().getHours()
   const greeting = (h < 12 ? 'בוקר טוב' : 'אחר הצהריים טובים') + ', ' + profile?.full_name + ' 👋'
@@ -602,7 +604,27 @@ function DashboardPage() {
               </div>
               <div style={{ padding:'8px 14px', fontSize:11, color:'var(--text3)', borderBottom:'1px solid var(--border)' }}>בטיפול נציג מעל 2 ימי עסקים</div>
               <div style={{ padding:'10px 14px', maxHeight:280, overflowY:'auto' }}>
-                <MiniList cases={overdueCases} empty="אין חריגות" onClick={openCase} />
+                {overdueCases.length === 0
+                  ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>אין חריגות</div>
+                  : Object.entries(
+                      overdueCases.reduce((acc: any, c: any) => {
+                        const agent = c.agent_name || 'לא משויך'
+                        if (!acc[agent]) acc[agent] = []
+                        acc[agent].push(c)
+                        return acc
+                      }, {})
+                    ).sort((a: any, b: any) => b[1].length - a[1].length)
+                    .map(([agent, agentCases]: any) => (
+                      <div key={agent} style={{ marginBottom:8, padding:'8px 12px', background:'#fff5f5', borderRadius:8, border:'1px solid #fca5a5', cursor:'pointer' }}
+                        onClick={() => showList(`🔴 חריגות — ${agent}`, agentCases)}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <span style={{ fontWeight:700, fontSize:13 }}>{agent}</span>
+                          <span style={{ background:'#dc2626', color:'#fff', borderRadius:999, padding:'2px 10px', fontSize:12, fontWeight:700 }}>{agentCases.length}</span>
+                        </div>
+                        <div style={{ fontSize:11, color:'#9ca3af', marginTop:3 }}>לחץ לפירוט</div>
+                      </div>
+                    ))
+                }
               </div>
             </div>
             <div className="card">
@@ -610,9 +632,35 @@ function DashboardPage() {
                 <div className="card-title" style={{ color:'var(--purple)' }}>🟣 ממתין/בטיפול מנהל</div>
                 <span className="badge b-purple">{mgrWait.length + mgrActive.length}</span>
               </div>
-              <div style={{ padding:'8px 14px', fontSize:11, color:'var(--text3)', borderBottom:'1px solid var(--border)' }}>הועבר/בטיפול שיחת מנהל מעל 2 ימי עסקים</div>
+              <div style={{ padding:'8px 14px', fontSize:11, color:'var(--text3)', borderBottom:'1px solid var(--border)', display:'flex', gap:12 }}>
+                <span>ממתין: <strong>{mgrWait.length}</strong></span>
+                <span>בטיפול: <strong>{mgrActive.length}</strong></span>
+              </div>
               <div style={{ padding:'10px 14px', maxHeight:280, overflowY:'auto' }}>
-                <MiniList cases={[...mgrWait,...mgrActive]} empty="אין חריגות" onClick={openCase} />
+                {mgrWait.length + mgrActive.length === 0
+                  ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>אין חריגות</div>
+                  : Object.entries(
+                      [...mgrWait, ...mgrActive].reduce((acc: any, c: any) => {
+                        const agent = c.agent_name || 'לא משויך'
+                        if (!acc[agent]) acc[agent] = []
+                        acc[agent].push(c)
+                        return acc
+                      }, {})
+                    ).sort((a: any, b: any) => (b[1] as any[]).length - (a[1] as any[]).length)
+                    .map(([agent, agentCases]: any) => (
+                      <div key={agent} style={{ marginBottom:8, padding:'8px 12px', background:'#faf5ff', borderRadius:8, border:'1px solid #c4b5fd', cursor:'pointer' }}
+                        onClick={() => showList(`🟣 ${agent}`, agentCases)}>
+                        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                          <span style={{ fontWeight:700, fontSize:13 }}>{agent}</span>
+                          <span style={{ background:'#7c3aed', color:'#fff', borderRadius:999, padding:'2px 10px', fontSize:12, fontWeight:700 }}>{agentCases.length}</span>
+                        </div>
+                        <div style={{ fontSize:11, color:'#9ca3af', marginTop:3 }}>
+                          {agentCases.filter((c:any) => c.status_name?.includes('ממתין') || c.status_name?.includes('הועבר')).length} ממתינות ·{' '}
+                          {agentCases.filter((c:any) => c.status_name?.includes('בטיפול')).length} בטיפול
+                        </div>
+                      </div>
+                    ))
+                }
               </div>
             </div>
             <div className="card">
