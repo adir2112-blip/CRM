@@ -451,8 +451,8 @@ function DashboardPage() {
   const overdueCases = isAdmin 
     ? cases.filter(c => isOverdue(c))
     : myCases.filter(c => isOverdue(c))
-  const mgrWait = cases.filter(c => c.status_name === 'ממתין לשיחת מנהל' || c.status_name === 'הועבר לשיחת מנהל')
-  const mgrActive = cases.filter(c => c.status_name === 'בטיפול בשיחת מנהל' || c.status_name === 'בטיפול לאחר שיחת מנהל')
+  const mgrWait = cases.filter(c => isMgrWaitOverdue(c))
+  const mgrActive = cases.filter(c => isMgrActiveOverdue(c))
   const doneMine = myCases.filter(c => c.status_name?.includes('טופל')).length
   const h = new Date().getHours()
   const greeting = (h < 12 ? 'בוקר טוב' : 'אחר הצהריים טובים') + ', ' + profile?.full_name + ' 👋'

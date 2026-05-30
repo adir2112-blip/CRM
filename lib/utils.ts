@@ -15,16 +15,17 @@ export function businessDaysBetween(d1: Date, d2: Date): number {
 export function isOverdue(c: any): boolean {
   if (!c) return false
   if (c.status_name === 'טופל' || c.status_name === 'טופל לאחר שיחת מנהל') return false
-  return businessDaysBetween(new Date(c.created_at), new Date(c.updated_at)) > 2
+  // Check business days from last update until today
+  return businessDaysBetween(new Date(c.updated_at), new Date()) > 2
 }
 
 export function isMgrWaitOverdue(c: any): boolean {
-  if (c.status_name !== 'הועבר לשיחת מנהל') return false
-  return businessDaysBetween(new Date(c.created_at), new Date()) > 2
+  if (c.status_name !== 'הועבר לשיחת מנהל' && c.status_name !== 'ממתין לשיחת מנהל') return false
+  return businessDaysBetween(new Date(c.updated_at), new Date()) > 2
 }
 
 export function isMgrActiveOverdue(c: any): boolean {
-  if (c.status_name !== 'בטיפול בשיחת מנהל') return false
+  if (c.status_name !== 'בטיפול בשיחת מנהל' && c.status_name !== 'בטיפול לאחר שיחת מנהל') return false
   return businessDaysBetween(new Date(c.updated_at), new Date()) > 2
 }
 
