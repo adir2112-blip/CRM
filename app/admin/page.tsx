@@ -126,6 +126,8 @@ function OnlineUsersTab() {
     </div>
   )
 }
+
+function AgentStatsTab() {
   const supabase = createClient()
   const [stats, setStats] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
