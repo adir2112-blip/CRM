@@ -7,42 +7,34 @@ const supabase = createClient(
 )
 
 export async function POST(request: Request) {
-  let rawBody = ''
   try {
-    rawBody = await request.text()
-    const body = JSON.parse(rawBody)
-
-    // Save raw webhook to debug table
-    await supabase.from('webhook_log').upsert({
-      id: Date.now().toString(),
-      received_at: new Date().toISOString(),
-      body: rawBody.slice(0, 5000)
-    }, { onConflict: 'id' })
-
-    const changes = body.changes || body.events || (Array.isArray(body) ? body : [body])
+    const body = await request.json()
+    const changes = body.changes || []
 
     for (const change of changes) {
-      const event = change._event || change.event || change.type || ''
+      const event = change._event || ''
 
       if (event === 'NEW_MESSAGE') {
-        const tx = change.transaction || change.message || change.newMessage
-        const ticket = change.ticket || change.ticketData
-        if (!tx || !ticket) continue
+        const tx = change.transaction
+        const ticketId = change.ticketId
+        if (!tx || !ticketId) continue
+
+        const participant = tx.fromParticipant || {}
+        const isClient = participant.type === 'Client'
 
         await supabase.from('glassix_messages').upsert({
-          message_id: String(tx.id || Date.now()),
-          ticket_id: String(ticket.id),
-          text: tx.text || tx.body || '',
-          sender_name: tx.senderName || tx.userName || '',
-          sender_type: tx.senderType || 'Unknown',
-          created_at: tx.time || tx.createTime || new Date().toISOString(),
-          ticket_data: JSON.stringify(ticket)
+          message_id: String(tx.id),
+          ticket_id: String(ticketId),
+          text: tx.text || '',
+          sender_name: participant.name || '',
+          sender_type: isClient ? 'Client' : 'Agent',
+          created_at: tx.dateTime || new Date().toISOString(),
+          ticket_data: JSON.stringify({ ticketId, participant })
         }, { onConflict: 'message_id' })
       }
 
       if (event === 'NEW_TICKET') {
-        const ticket = change.ticket || change.ticketData
-        if (!ticket) continue
+        // Invalidate cache
         await supabase.from('glassix_cache')
           .delete()
           .eq('cache_key', `glassix_tickets_${process.env.GLASSIX_WORKSPACE || 'm4l-il'}`)
@@ -51,14 +43,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (e: any) {
-    // Save error to debug table too
-    try {
-      await supabase.from('webhook_log').upsert({
-        id: Date.now().toString(),
-        received_at: new Date().toISOString(),
-        body: `ERROR: ${e.message} | RAW: ${rawBody.slice(0, 1000)}`
-      }, { onConflict: 'id' })
-    } catch {}
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
