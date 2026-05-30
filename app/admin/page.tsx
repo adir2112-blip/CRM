@@ -11,6 +11,8 @@ function OnlineUsersTab() {
   const supabase = createClient()
   const [sessions, setSessions] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [filterName, setFilterName] = useState('')
+  const [filterOrg, setFilterOrg] = useState('')
 
   async function load() {
     setLoading(true)
@@ -34,7 +36,7 @@ function OnlineUsersTab() {
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
 
   // Group by user_id
-  const byUser: Record<string, { name: string, org: string, sessions: any[], totalMins: number, isActive: boolean, firstLogin: string, lastLogout: string | null }> = {}
+  const byUser: Record<string, any> = {}
   sessions.forEach(s => {
     if (!byUser[s.user_id]) {
       byUser[s.user_id] = { name: s.user_name, org: s.org_names || '', sessions: [], totalMins: 0, isActive: false, firstLogin: s.login_at, lastLogout: null }
@@ -47,14 +49,34 @@ function OnlineUsersTab() {
     if (s.login_at < byUser[s.user_id].firstLogin) byUser[s.user_id].firstLogin = s.login_at
   })
 
-  const users = Object.values(byUser).sort((a, b) => b.isActive ? 1 : -1)
-  const activeUsers = users.filter(u => u.isActive)
+  // Get unique org names for filter
+  const allOrgs = Array.from(new Set(
+    Object.values(byUser).flatMap((u: any) => (u.org || '').split(',').map((o: string) => o.trim()).filter(Boolean))
+  )).sort()
+
+  // Filter users
+  let users = Object.values(byUser).sort((a: any, b: any) => (b.isActive ? 1 : -1) - (a.isActive ? 1 : -1))
+  if (filterName) users = users.filter((u: any) => u.name?.includes(filterName))
+  if (filterOrg) users = users.filter((u: any) => u.org?.includes(filterOrg))
+
+  const activeUsers = users.filter((u: any) => u.isActive)
 
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
         <div style={{ fontSize:13, fontWeight:700 }}>🟢 משתמשים מחוברים היום</div>
         <button className="btn btn-xs" onClick={load}>🔄 רענן</button>
+      </div>
+
+      {/* Filters */}
+      <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
+        <input className="form-input" value={filterName} onChange={e => setFilterName(e.target.value)} placeholder="🔍 חיפוש שם נציג..." style={{ width:180 }} />
+        <select className="form-input" value={filterOrg} onChange={e => setFilterOrg(e.target.value)} style={{ width:200, fontSize:12 }}>
+          <option value="">כל הארגונים</option>
+          {allOrgs.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+        {(filterName || filterOrg) && <button className="btn btn-xs" onClick={() => { setFilterName(''); setFilterOrg('') }}>✕ נקה</button>}
+        <span style={{ fontSize:12, color:'var(--text3)', alignSelf:'center' }}>{activeUsers.length} פעילים · {users.length} סה"כ</span>
       </div>
 
       {/* Active now */}
@@ -66,7 +88,7 @@ function OnlineUsersTab() {
             <tbody>
               {activeUsers.length === 0
                 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין משתמשים פעילים</td></tr>
-                : activeUsers.map(u => (
+                : activeUsers.map((u: any) => (
                   <tr key={u.name}>
                     <td><div style={{ display:'flex', alignItems:'center', gap:8 }}><span style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', display:'inline-block' }} /><span style={{ fontWeight:600 }}>{u.name}</span></div></td>
                     <td style={{ fontSize:11, color:'var(--text3)' }}>{u.org || '—'}</td>
@@ -80,23 +102,27 @@ function OnlineUsersTab() {
         </div>
       </div>
 
-      {/* Summary by user */}
+      {/* Summary */}
       <div>
         <div style={{ fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8 }}>סיכום יומי לפי נציג</div>
         <div className="card" style={{ padding:0 }}>
           <table>
-            <thead><tr><th>נציג</th><th>התחבר ראשון</th><th>התנתק אחרון</th><th>כניסות</th><th>סה"כ שעות</th><th>סטטוס</th></tr></thead>
+            <thead><tr><th>נציג</th><th>ארגון</th><th>התחבר ראשון</th><th>התנתק אחרון</th><th>כניסות</th><th>סה"כ שעות</th><th>סטטוס</th></tr></thead>
             <tbody>
-              {users.map(u => (
-                <tr key={u.name}>
-                  <td style={{ fontWeight:600 }}>{u.name}</td>
-                  <td style={{ fontSize:12 }}>{fmtTime(u.firstLogin)}</td>
-                  <td style={{ fontSize:12, color:'var(--text3)' }}>{u.lastLogout ? fmtTime(u.lastLogout) : '—'}</td>
-                  <td style={{ textAlign:'center' }}><span className="badge b-gray">{u.sessions.length}</span></td>
-                  <td style={{ fontSize:13, fontWeight:800, color:'#2563eb' }}>{minsToStr(u.totalMins)}</td>
-                  <td><span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, background: u.isActive ? '#dcfce7' : '#f1f5f9', color: u.isActive ? '#15803d' : '#64748b', fontWeight:600 }}>{u.isActive ? '🟢 פעיל' : '⚫ לא מחובר'}</span></td>
-                </tr>
-              ))}
+              {users.length === 0
+                ? <tr><td colSpan={7} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין תוצאות</td></tr>
+                : users.map((u: any) => (
+                  <tr key={u.name}>
+                    <td style={{ fontWeight:600 }}>{u.name}</td>
+                    <td style={{ fontSize:11, color:'var(--text3)', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.org || '—'}</td>
+                    <td style={{ fontSize:12 }}>{fmtTime(u.firstLogin)}</td>
+                    <td style={{ fontSize:12, color:'var(--text3)' }}>{u.lastLogout ? fmtTime(u.lastLogout) : '—'}</td>
+                    <td style={{ textAlign:'center' }}><span className="badge b-gray">{u.sessions.length}</span></td>
+                    <td style={{ fontSize:13, fontWeight:800, color:'#2563eb' }}>{minsToStr(u.totalMins)}</td>
+                    <td><span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, background: u.isActive ? '#dcfce7' : '#f1f5f9', color: u.isActive ? '#15803d' : '#64748b', fontWeight:600 }}>{u.isActive ? '🟢 פעיל' : '⚫ לא מחובר'}</span></td>
+                  </tr>
+                ))
+              }
             </tbody>
           </table>
         </div>
