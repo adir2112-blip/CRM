@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, Suspense, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
@@ -196,29 +196,38 @@ function DashboardPage() {
   const [smartSearch, setSmartSearch] = useState('')
   const [smartResult, setSmartResult] = useState<any>(null)
   const [smartLoading, setSmartLoading] = useState(false)
+  const [smartPopupCase, setSmartPopupCase] = useState<any>(null)
+  const smartTimer = useRef<any>(null)
 
-  async function doSmartSearch() {
-    if (!smartSearch.trim()) return
+  function handleSmartInput(val: string) {
+    setSmartSearch(val)
+    if (!val.trim()) { setSmartResult(null); return }
+    clearTimeout(smartTimer.current)
+    smartTimer.current = setTimeout(() => doSmartSearch(val), 500)
+  }
+
+  async function doSmartSearch(q?: string) {
+    const query = (q || smartSearch).trim()
+    if (!query) return
     setSmartLoading(true)
-    const q = smartSearch.trim().toLowerCase()
+    const qPhone = query.replace(/\D/g, '')
     const matched = cases.filter(c =>
-      c.customer_name?.toLowerCase().includes(q) ||
-      c.phone?.replace(/\D/g,'').includes(q.replace(/\D/g,'')) ||
-      c.id_number?.includes(q)
+      c.customer_name?.toLowerCase().includes(query.toLowerCase()) ||
+      (qPhone.length >= 7 && c.phone?.replace(/\D/g,'').includes(qPhone)) ||
+      c.id_number?.includes(query)
     )
     if (matched.length === 0) { setSmartResult(null); setSmartLoading(false); return }
-    
-    // Group by customer (phone or id)
+
     const first = matched[0]
     const customerCases = cases.filter(c =>
       (first.phone && c.phone === first.phone) ||
-      (first.id_number && c.id_number === first.id_number)
-    ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      (!first.phone && first.id_number && c.id_number === first.id_number)
+    ).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     const now = new Date()
     const sevenDaysAgo = new Date(now.getTime() - 7 * 864e5)
-    const last7Days = customerCases.filter(c => new Date(c.created_at) >= sevenDaysAgo).length
-    const openCases = customerCases.filter(c => !c.status_name?.includes('טופל')).length
+    const last7Days = customerCases.filter((c: any) => new Date(c.created_at) >= sevenDaysAgo).length
+    const openCases = customerCases.filter((c: any) => !c.status_name?.includes('טופל')).length
 
     setSmartResult({
       name: first.customer_name,
@@ -509,14 +518,12 @@ function DashboardPage() {
             <input
               className="form-input"
               value={smartSearch}
-              onChange={e => { setSmartSearch(e.target.value); if(!e.target.value) setSmartResult(null) }}
+              onChange={e => handleSmartInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && doSmartSearch()}
               placeholder="שם לקוח / טלפון / ת״ז..."
               style={{ flex:1 }}
             />
-            <button className="btn btn-primary" onClick={doSmartSearch} disabled={smartLoading}>
-              {smartLoading ? '⏳' : '🔍 חפש'}
-            </button>
+            {smartLoading && <span style={{ fontSize:12, color:'var(--text3)', alignSelf:'center' }}>⏳</span>}
             {smartResult && <button className="btn" onClick={() => { setSmartResult(null); setSmartSearch('') }}>✕ נקה</button>}
           </div>
 
@@ -566,7 +573,9 @@ function DashboardPage() {
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:12, fontWeight:600, color:'#1e293b' }}>{c.cat1_name}{c.cat2_name ? ' › ' + c.cat2_name : ''}</div>
-                      <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>{fmt(c.created_at)} · {c.agent_name} · {c.org_name?.split(' ')[0]}</div>
+                      <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>
+                        {new Date(c.created_at).toLocaleDateString('he-IL')} · {relativeTime(c.created_at)} · {c.agent_name}
+                      </div>
                     </div>
                     <span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span>
                   </div>
@@ -621,12 +630,19 @@ function DashboardPage() {
                   ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>אין תלונות חוזרות</div>
                   : recurringCustomers.map(r => (
                     <div key={r.phone} onClick={() => showList(`🔁 ${r.name} (${r.count} פניות)`, r.cases)}
-                      style={{ padding:'10px 14px', cursor:'pointer', borderRadius:8, background:'#fff5f5', border:'1px solid #fca5a5', marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-                      <div>
+                      style={{ padding:'10px 14px', cursor:'pointer', borderRadius:8, background:'#fff5f5', border:'1px solid #fca5a5', marginBottom:8 }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
                         <div style={{ fontWeight:600, fontSize:13, color:'#dc2626' }}>{r.name}</div>
-                        <div style={{ fontSize:11, color:'#9ca3af', marginTop:2 }}>{r.phone}</div>
+                        <span style={{ background:'#dc2626', color:'#fff', borderRadius:999, padding:'3px 10px', fontSize:12, fontWeight:700 }}>{r.count} פניות</span>
                       </div>
-                      <span style={{ background:'#dc2626', color:'#fff', borderRadius:999, padding:'3px 10px', fontSize:12, fontWeight:700 }}>{r.count} פניות</span>
+                      <div style={{ fontSize:11, color:'#9ca3af', marginBottom:4 }}>{r.phone}</div>
+                      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                        {r.cases.slice(0,3).map((c: any) => (
+                          <span key={c.id} style={{ fontSize:10, color:'#64748b', background:'#fee2e2', borderRadius:4, padding:'2px 6px' }}>
+                            {new Date(c.created_at).toLocaleDateString('he-IL')} · {relativeTime(c.created_at)}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   ))
                 }
@@ -693,7 +709,21 @@ function DashboardPage() {
                 {chartData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
-                      <Pie data={chartData} cx="50%" cy="50%" innerRadius={55} outerRadius={95} dataKey="value">
+                      <Pie 
+                        data={chartData} cx="50%" cy="50%" innerRadius={50} outerRadius={85} dataKey="value"
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }: any) => {
+                          const RADIAN = Math.PI / 180
+                          const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN)
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN)
+                          return percent > 0.05 ? (
+                            <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={700}>
+                              {`${Math.round(percent * 100)}%`}
+                            </text>
+                          ) : null
+                        }}
+                        labelLine={false}
+                      >
                         {chartData.map((_,i) => <Cell key={i} fill={COLORS[i%COLORS.length]} />)}
                       </Pie>
                       <Tooltip />

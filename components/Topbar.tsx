@@ -95,8 +95,9 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     // Filter and deduplicate by phone
     const matched = all.filter(c => {
       const nameMatch = c.customer_name?.toLowerCase().includes(qClean.toLowerCase())
-      const phoneMatch = qPhone.length >= 7 && c.phone?.replace(/\D/g,'').includes(qPhone)
-      const idMatch = c.id_number?.includes(qClean)
+      const cPhone = c.phone?.replace(/\D/g,'') || ''
+      const phoneMatch = qPhone.length >= 4 && cPhone.startsWith(qPhone)
+      const idMatch = qClean.length >= 5 && c.id_number?.startsWith(qClean)
       return nameMatch || phoneMatch || idMatch
     })
     
