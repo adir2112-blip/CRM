@@ -14,42 +14,41 @@ function OnlineUsersTab() {
 
   async function load() {
     setLoading(true)
-    // Consider active if last_ping within 10 minutes
-    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
     const today = new Date().toISOString().split('T')[0]
-    const { data } = await supabase
-      .from('user_sessions')
-      .select('*')
-      .gte('login_at', today)
-      .order('login_at', { ascending: false })
+    const { data } = await supabase.from('user_sessions').select('*').gte('login_at', today).order('login_at', { ascending: true })
     setSessions(data || [])
     setLoading(false)
   }
 
   useEffect(() => { load(); const t = setInterval(load, 30000); return () => clearInterval(t) }, [])
 
-  function fmt(d: string) {
+  function fmtTime(d: string) {
     return new Date(d).toLocaleString('he-IL', { timeZone:'Asia/Jerusalem', hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit' })
   }
 
-  function duration(login: string, logout?: string) {
-    const from = new Date(login)
-    const to = logout ? new Date(logout) : new Date()
-    const mins = Math.round((to.getTime() - from.getTime()) / 60000)
+  function minsToStr(mins: number) {
     if (mins < 60) return `${mins} דק'`
     return `${Math.floor(mins/60)}:${String(mins%60).padStart(2,'0')} ש'`
   }
 
   const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
-  const active = sessions.filter(s => s.is_active && s.last_ping > tenMinAgo)
-  const inactive = sessions.filter(s => !s.is_active || s.last_ping <= tenMinAgo)
 
-  // Group by user for total hours
-  const byUser: Record<string, number> = {}
+  // Group by user_id
+  const byUser: Record<string, { name: string, org: string, sessions: any[], totalMins: number, isActive: boolean, firstLogin: string, lastLogout: string | null }> = {}
   sessions.forEach(s => {
+    if (!byUser[s.user_id]) {
+      byUser[s.user_id] = { name: s.user_name, org: s.org_names || '', sessions: [], totalMins: 0, isActive: false, firstLogin: s.login_at, lastLogout: null }
+    }
+    byUser[s.user_id].sessions.push(s)
     const mins = Math.round((new Date(s.logout_at || new Date()).getTime() - new Date(s.login_at).getTime()) / 60000)
-    byUser[s.user_name] = (byUser[s.user_name] || 0) + mins
+    byUser[s.user_id].totalMins += mins
+    if (s.is_active && s.last_ping > tenMinAgo) byUser[s.user_id].isActive = true
+    if (s.logout_at) byUser[s.user_id].lastLogout = s.logout_at
+    if (s.login_at < byUser[s.user_id].firstLogin) byUser[s.user_id].firstLogin = s.login_at
   })
+
+  const users = Object.values(byUser).sort((a, b) => b.isActive ? 1 : -1)
+  const activeUsers = users.filter(u => u.isActive)
 
   return (
     <div>
@@ -60,51 +59,22 @@ function OnlineUsersTab() {
 
       {/* Active now */}
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:12, fontWeight:700, color:'#15803d', marginBottom:8 }}>פעילים כרגע ({active.length})</div>
+        <div style={{ fontSize:12, fontWeight:700, color:'#15803d', marginBottom:8 }}>פעילים כרגע ({activeUsers.length})</div>
         <div className="card" style={{ padding:0 }}>
           <table>
-            <thead><tr><th>נציג</th><th>ארגון</th><th>התחבר</th><th>זמן מחובר</th><th>Ping אחרון</th></tr></thead>
+            <thead><tr><th>נציג</th><th>ארגון</th><th>התחבר ראשון</th><th>סה"כ מחובר</th></tr></thead>
             <tbody>
-              {active.length === 0 ? <tr><td colSpan={5} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין משתמשים פעילים</td></tr>
-              : active.map(s => (
-                <tr key={s.id}>
-                  <td>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <span style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', display:'inline-block' }} />
-                      <span style={{ fontWeight:600 }}>{s.user_name}</span>
-                    </div>
-                  </td>
-                  <td style={{ fontSize:12, color:'var(--text3)' }}>{s.org_names || '—'}</td>
-                  <td style={{ fontSize:12 }}>{fmt(s.login_at)}</td>
-                  <td style={{ fontSize:12, fontWeight:600, color:'#059669' }}>{duration(s.login_at)}</td>
-                  <td style={{ fontSize:11, color:'var(--text3)' }}>{fmt(s.last_ping)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Today's sessions */}
-      <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8 }}>כל הסשנים היום ({sessions.length})</div>
-        <div className="card" style={{ padding:0 }}>
-          <table>
-            <thead><tr><th>נציג</th><th>התחבר</th><th>התנתק</th><th>משך</th></tr></thead>
-            <tbody>
-              {sessions.map(s => (
-                <tr key={s.id} style={{ opacity: s.is_active && s.last_ping > tenMinAgo ? 1 : 0.6 }}>
-                  <td>
-                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                      <span style={{ width:8, height:8, borderRadius:'50%', background: s.is_active && s.last_ping > tenMinAgo ? '#10b981' : '#94a3b8', display:'inline-block' }} />
-                      {s.user_name}
-                    </div>
-                  </td>
-                  <td style={{ fontSize:12 }}>{fmt(s.login_at)}</td>
-                  <td style={{ fontSize:12, color:'var(--text3)' }}>{s.logout_at ? fmt(s.logout_at) : '—'}</td>
-                  <td style={{ fontSize:12, fontWeight:600 }}>{duration(s.login_at, s.logout_at)}</td>
-                </tr>
-              ))}
+              {activeUsers.length === 0
+                ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)' }}>אין משתמשים פעילים</td></tr>
+                : activeUsers.map(u => (
+                  <tr key={u.name}>
+                    <td><div style={{ display:'flex', alignItems:'center', gap:8 }}><span style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', display:'inline-block' }} /><span style={{ fontWeight:600 }}>{u.name}</span></div></td>
+                    <td style={{ fontSize:11, color:'var(--text3)' }}>{u.org || '—'}</td>
+                    <td style={{ fontSize:12 }}>{fmtTime(u.firstLogin)}</td>
+                    <td style={{ fontSize:12, fontWeight:700, color:'#059669' }}>{minsToStr(u.totalMins)}</td>
+                  </tr>
+                ))
+              }
             </tbody>
           </table>
         </div>
@@ -112,15 +82,23 @@ function OnlineUsersTab() {
 
       {/* Summary by user */}
       <div>
-        <div style={{ fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8 }}>סיכום שעות היום</div>
-        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          {Object.entries(byUser).map(([name, mins]) => (
-            <div key={name} style={{ background:'var(--bg3)', borderRadius:10, padding:'10px 16px', border:'1px solid var(--border)', textAlign:'center' }}>
-              <div style={{ fontWeight:700, fontSize:13 }}>{name}</div>
-              <div style={{ fontSize:18, fontWeight:900, color:'#2563eb', marginTop:4 }}>{Math.floor(mins/60)}:{String(mins%60).padStart(2,'0')}</div>
-              <div style={{ fontSize:10, color:'var(--text3)' }}>שעות</div>
-            </div>
-          ))}
+        <div style={{ fontSize:12, fontWeight:700, color:'var(--text2)', marginBottom:8 }}>סיכום יומי לפי נציג</div>
+        <div className="card" style={{ padding:0 }}>
+          <table>
+            <thead><tr><th>נציג</th><th>התחבר ראשון</th><th>התנתק אחרון</th><th>כניסות</th><th>סה"כ שעות</th><th>סטטוס</th></tr></thead>
+            <tbody>
+              {users.map(u => (
+                <tr key={u.name}>
+                  <td style={{ fontWeight:600 }}>{u.name}</td>
+                  <td style={{ fontSize:12 }}>{fmtTime(u.firstLogin)}</td>
+                  <td style={{ fontSize:12, color:'var(--text3)' }}>{u.lastLogout ? fmtTime(u.lastLogout) : '—'}</td>
+                  <td style={{ textAlign:'center' }}><span className="badge b-gray">{u.sessions.length}</span></td>
+                  <td style={{ fontSize:13, fontWeight:800, color:'#2563eb' }}>{minsToStr(u.totalMins)}</td>
+                  <td><span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, background: u.isActive ? '#dcfce7' : '#f1f5f9', color: u.isActive ? '#15803d' : '#64748b', fontWeight:600 }}>{u.isActive ? '🟢 פעיל' : '⚫ לא מחובר'}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
