@@ -75,18 +75,41 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     if (!q.trim()) { setResults([]); setShowResults(false); return }
     const { data: { user } } = await supabase.auth.getUser()
     const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs, role').eq('id', user?.id || '').single()
+    
+    const qClean = q.trim()
+    const qPhone = qClean.replace(/\D/g, '')
+    
     let query = supabase
       .from('cases')
       .select('id, customer_name, phone, id_number, org_name, org_id, status_name, updated_at, agent_name')
-      .or(`customer_name.ilike.%${q}%,phone.ilike.%${q}%,id_number.ilike.%${q}%`)
       .order('updated_at', { ascending: false })
-      .limit(8)
-    // Filter by allowed orgs for agents
+      .limit(50)
+    
     if (myProfile?.role === 'agent' && myProfile?.allowed_orgs?.length > 0) {
       query = query.in('org_id', myProfile.allowed_orgs)
     }
+    
     const { data } = await query
-    setResults(data || [])
+    const all = data || []
+    
+    // Filter and deduplicate by phone
+    const matched = all.filter(c => {
+      const nameMatch = c.customer_name?.toLowerCase().includes(qClean.toLowerCase())
+      const phoneMatch = qPhone.length >= 7 && c.phone?.replace(/\D/g,'').includes(qPhone)
+      const idMatch = c.id_number?.includes(qClean)
+      return nameMatch || phoneMatch || idMatch
+    })
+    
+    // Deduplicate — show latest case per unique phone
+    const seen = new Set<string>()
+    const unique = matched.filter(c => {
+      const key = c.phone || c.id_number || c.id
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    }).slice(0, 8)
+    
+    setResults(unique)
     setShowResults(true)
   }
 
