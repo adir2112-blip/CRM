@@ -250,6 +250,8 @@ function DashboardPage() {
     setSmartLoading(false)
   }
   const [showSLAPopup, setShowSLAPopup] = useState(false)
+  const isSuperAdmin = profile?.email === 'adir2112@gmail.com'
+  const isAdmin = profile?.role === 'admin'
 
   useEffect(() => {
     if (!profile || isAdmin) return

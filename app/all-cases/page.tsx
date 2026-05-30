@@ -79,6 +79,7 @@ export default function AllCasesAgentPage() {
   const [glassixLoading, setGlassixLoading] = useState(false)
   const [glassixTotal, setGlassixTotal] = useState(0)
   const [glassixError, setGlassixError] = useState('')
+  const [toast, setToast] = useState('')
   const [transferCase, setTransferCase] = useState<any>(null)
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
