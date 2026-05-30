@@ -18,6 +18,9 @@ export default function AgentsStatusPage() {
   const [statuses, setStatuses] = useState<any[]>([])
   const [toast, setToast] = useState('')
   const [selectedAgent, setSelectedAgent] = useState<any>(null)
+  const [orgFilter, setOrgFilter] = useState('')
+  const [allAgents, setAllAgents] = useState<any[]>([])
+  const [transferModal, setTransferModal] = useState<{caseId:number, currentAgent:string} | null>(null)
   const [agentTab, setAgentTab] = useState<'details'|'sms'>('details')
   const [agentSmsTemplates, setAgentSmsTemplates] = useState<any[]>([])
   const [agentSmsText, setAgentSmsText] = useState('')
@@ -28,7 +31,7 @@ export default function AgentsStatusPage() {
   useEffect(() => {
     if (!profile) return
     supabase.from('cases').select('*').order('updated_at', { ascending: false }).then(({ data }) => setCases(data || []))
-    supabase.from('profiles').select('*').eq('active', true).order('full_name').then(({ data }) => setAgents(data || []))
+    supabase.from('profiles').select('*').eq('active', true).order('full_name').then(({ data }) => { setAgents(data || []); setAllAgents(data || []) })
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
   }, [profile])
 
@@ -98,6 +101,23 @@ export default function AgentsStatusPage() {
           <div className="page-title">👥 בטיפול נציגים</div>
         </div>
 
+        {/* Available agents */}
+        {(() => {
+          const busyIds = new Set(agentStats.filter(a => a.totalCases > 0).map(a => a.id))
+          const available = agents.filter(a => !busyIds.has(a.id))
+          if (available.length === 0) return null
+          return (
+            <div style={{ marginBottom:16, padding:'12px 16px', background:'#f0fdf4', borderRadius:10, border:'1px solid #86efac' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#15803d', marginBottom:8 }}>✅ נציגים פנויים ({available.length})</div>
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                {available.map(a => (
+                  <span key={a.id} style={{ fontSize:12, padding:'4px 12px', borderRadius:999, background:'#dcfce7', color:'#15803d', fontWeight:600 }}>{a.full_name}</span>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
+
         <div className="card" style={{ padding:0 }}>
           <div className="table-wrap">
             <table>
@@ -164,27 +184,68 @@ export default function AgentsStatusPage() {
             </div>
             <div style={{ maxHeight:460, overflowY:'auto' }}>
               <table>
-                <thead><tr><th>#</th><th>שם לקוח</th><th>טלפון</th><th>ארגון</th><th>סיווג</th><th>סטטוס</th><th>ימי עסקים</th><th>עודכן</th></tr></thead>
+                <thead><tr><th>#</th><th>שם לקוח</th><th>טלפון</th><th>ארגון</th><th>סיווג</th><th>סטטוס</th><th>ימי עסקים</th><th>עודכן</th><th>העבר</th></tr></thead>
                 <tbody>
                   {(selectedAgent.showOverdueOnly ? selectedAgent.overdueCases : selectedAgent.openCases).map((c: any) => {
                     const bd = businessDaysBetween(new Date(c.created_at), new Date(c.updated_at))
                     const od = isOverdue(c)
                     return (
-                      <tr key={c.id} style={{ cursor:'pointer', background:od?'#fff5f5':undefined }} onClick={() => { setSelectedAgent(null); openCase(c) }}>
-                        <td className="td-muted">#{c.id}</td>
-                        <td style={{ fontWeight:600, color:'var(--accent)' }}>{c.customer_name}</td>
+                      <tr key={c.id} style={{ background:od?'#fff5f5':undefined }}>
+                        <td className="td-muted" style={{ cursor:'pointer' }} onClick={() => { setSelectedAgent(null); openCase(c) }}>#{c.id}</td>
+                        <td style={{ fontWeight:600, color:'var(--accent)', cursor:'pointer' }} onClick={() => { setSelectedAgent(null); openCase(c) }}>{c.customer_name}</td>
                         <td className="td-mono">{c.phone}</td>
                         <td><span className="badge b-gray" style={{ fontSize:10 }}>{(c.org_name||'').split(' ')[0]}</span></td>
                         <td style={{ fontSize:11 }}>{c.cat1_name}{c.cat2_name?' › '+c.cat2_name:''}</td>
                         <td><span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span></td>
                         <td>{od ? <span className="overdue-label">⚠ {bd} ימים</span> : <span style={{ fontSize:11, color:'var(--text3)' }}>{bd}</span>}</td>
                         <td className="td-muted" style={{ whiteSpace:'nowrap', fontSize:11 }}>{fmt(c.updated_at)}</td>
+                        <td>
+                          <button className="btn btn-xs" style={{ background:'#eff4ff', color:'#2563eb', border:'1px solid #bfdbfe' }}
+                            onClick={e => { e.stopPropagation(); setTransferModal({ caseId: c.id, currentAgent: selectedAgent.full_name }) }}>
+                            🔄 העבר
+                          </button>
+                        </td>
                       </tr>
                     )
                   })}
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transfer modal */}
+      {transferModal && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setTransferModal(null) }}>
+          <div className="modal modal-sm">
+            <div className="modal-header">
+              <div className="modal-title">🔄 העבר פניה לנציג אחר</div>
+              <button className="close-btn" onClick={() => setTransferModal(null)}>✕</button>
+            </div>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:14 }}>נציג נוכחי: <strong>{transferModal.currentAgent}</strong></div>
+            <div className="form-group">
+              <label className="form-label">בחר נציג יעד</label>
+              <select className="form-input" id="transfer-agent-select">
+                <option value="">בחר נציג...</option>
+                {allAgents.filter(a => a.full_name !== transferModal.currentAgent).map(a => (
+                  <option key={a.id} value={a.id}>{a.full_name}</option>
+                ))}
+              </select>
+            </div>
+            <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center' }} onClick={async () => {
+              const sel = document.getElementById('transfer-agent-select') as HTMLSelectElement
+              if (!sel?.value) return
+              const agent = allAgents.find(a => a.id === sel.value)
+              if (!agent) return
+              await supabase.from('cases').update({ agent_id: agent.id, agent_name: agent.full_name }).eq('id', transferModal.caseId)
+              const logMsg = `🔄 פניה הועברה מ-${transferModal.currentAgent} ל-${agent.full_name}`
+              await supabase.from('case_logs').insert({ case_id: transferModal.caseId, author_id: profile.id, author_name: profile.full_name, content: logMsg })
+              setTransferModal(null)
+              setSelectedAgent(null)
+              supabase.from('cases').select('*').order('updated_at', { ascending: false }).then(({ data }) => setCases(data || []))
+              showToast('פניה הועברה ✓')
+            }}>אשר העברה</button>
           </div>
         </div>
       )}
@@ -216,7 +277,7 @@ export default function AgentsStatusPage() {
             <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:16 }}>
               {statuses.map((s:any) => { const st=CM[s.name]||{bg:'#f3f4f6',ab:'#6b7280',c:'#374151',b:'#d1d5db'}; const sel=editStatus===s.name; return <button key={s.id} onClick={() => setEditStatus(s.name)} style={{ padding:'7px 16px', borderRadius:8, fontSize:12, fontWeight:sel?700:500, cursor:'pointer', fontFamily:'Heebo,sans-serif', background:sel?st.ab:st.bg, color:sel?'#fff':st.c, border:`1.5px solid ${sel?st.ab:st.b}`, boxShadow:sel?`0 3px 10px ${st.ab}50`:'none', outline:'none' }}>{s.name}</button> })}
             </div>
-            <button onClick={saveStatus} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#1d4ed8,#2563eb)', color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'Heebo,sans-serif', marginBottom:16, boxShadow:'0 4px 14px rgba(37,99,235,0.4)' }}>✓ עדכן סטטוס</button>
+            <button onClick={saveStatus} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#059669,#10b981)', color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'Heebo,sans-serif', marginBottom:16, boxShadow:'0 4px 14px rgba(5,150,105,0.4)' }}>✓ עדכן סטטוס</button>
             <div style={{ height:1, background:'var(--border)', margin:'0 0 14px 0' }} />
             <div style={{ fontSize:11, fontWeight:700, color:'var(--text2)', textTransform:'uppercase', marginBottom:10 }}>📝 תיעוד ידני</div>
             <div style={{ marginBottom:12, maxHeight:160, overflowY:'auto' }}>

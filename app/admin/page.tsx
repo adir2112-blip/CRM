@@ -3,8 +3,112 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useUser } from '@/lib/useUser'
 import Topbar from '@/components/Topbar'
+import * as XLSX from 'xlsx'
 
 const SUPER_ADMIN = 'adir2112@gmail.com'
+
+function AgentStatsTab() {
+  const supabase = createClient()
+  const [stats, setStats] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const from = month + '-01'
+      const to = month + '-31'
+      const { data } = await supabase.from('cases')
+        .select('agent_id, agent_name, status_name, created_at')
+        .gte('created_at', from).lte('created_at', to)
+      
+      const byAgent: Record<string, any> = {}
+      ;(data || []).forEach((c: any) => {
+        if (!c.agent_name) return
+        if (!byAgent[c.agent_name]) byAgent[c.agent_name] = { name: c.agent_name, total: 0, closed: 0 }
+        byAgent[c.agent_name].total++
+        if (c.status_name?.includes('טופל')) byAgent[c.agent_name].closed++
+      })
+      setStats(Object.values(byAgent).sort((a: any, b: any) => b.total - a.total))
+      setLoading(false)
+    }
+    load()
+  }, [month])
+
+  return (
+    <div>
+      <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:16 }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>📊 סטטיסטיקות נציגים</div>
+        <input type="month" className="form-input" value={month} onChange={e => setMonth(e.target.value)} style={{ width:160 }} />
+      </div>
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div> : (
+        <div className="card" style={{ padding:0 }}>
+          <table>
+            <thead><tr><th>נציג</th><th style={{ textAlign:'center' }}>סה"כ פניות</th><th style={{ textAlign:'center' }}>טופלו</th><th style={{ textAlign:'center' }}>אחוז טיפול</th></tr></thead>
+            <tbody>
+              {stats.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לחודש זה</td></tr>
+              : stats.map((s: any) => (
+                <tr key={s.name}>
+                  <td style={{ fontWeight:600 }}>{s.name}</td>
+                  <td style={{ textAlign:'center' }}><span className="badge b-blue">{s.total}</span></td>
+                  <td style={{ textAlign:'center' }}><span className="badge b-green">{s.closed}</span></td>
+                  <td style={{ textAlign:'center' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <div style={{ flex:1, height:8, background:'#e5e7eb', borderRadius:4, overflow:'hidden' }}>
+                        <div style={{ width:`${Math.round(s.closed/s.total*100)}%`, height:'100%', background:'#10b981', borderRadius:4 }} />
+                      </div>
+                      <span style={{ fontSize:12, fontWeight:700, color:'#059669', minWidth:36 }}>{Math.round(s.closed/s.total*100)}%</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActivityLogTab() {
+  const supabase = createClient()
+  const [logs, setLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.from('admin_activity_log')
+      .select('*').order('created_at', { ascending: false }).limit(100)
+      .then(({ data }) => { setLogs(data || []); setLoading(false) })
+  }, [])
+
+  function fmt(d: string) {
+    return new Date(d).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize:13, fontWeight:700, marginBottom:16 }}>📋 יומן שינויים</div>
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div> : (
+        <div className="card" style={{ padding:0 }}>
+          <table>
+            <thead><tr><th>תאריך</th><th>בוצע על ידי</th><th>פעולה</th><th>משתמש יעד</th></tr></thead>
+            <tbody>
+              {logs.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין פעולות</td></tr>
+              : logs.map((l: any) => (
+                <tr key={l.id}>
+                  <td className="td-muted" style={{ whiteSpace:'nowrap', fontSize:11 }}>{fmt(l.created_at)}</td>
+                  <td style={{ fontWeight:600, fontSize:13 }}>{l.performed_by_name}</td>
+                  <td style={{ fontSize:12 }}>{l.action}</td>
+                  <td style={{ fontSize:12, color:'var(--text3)' }}>{l.target_user}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AdminPage() {
   const { profile, loading } = useUser()
@@ -148,6 +252,33 @@ export default function AdminPage() {
     showToast('מחלקות עודכנו ✓')
   }
 
+  function exportAgentsExcel() {
+    const rows = users.map(u => ({
+      'שם מלא': u.full_name,
+      'מייל': u.email || '',
+      'תפקיד': u.role === 'admin' ? 'מנהל' : 'נציג',
+      'סטטוס': u.active ? 'פעיל' : 'לא פעיל',
+      'כניסה אחרונה': u.last_sign_in ? new Date(u.last_sign_in).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' }) : '—',
+      'מחלקות': u.allowed_orgs?.length > 0 ? u.allowed_orgs.map((id: string) => { const o = orgs.find(x => x.id === id); return o?.name || id }).join(', ') : 'כל המחלקות'
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'נציגים')
+    XLSX.writeFile(wb, `נציגים_${new Date().toISOString().split('T')[0]}.xlsx`)
+  }
+
+  async function logActivity(action: string, targetUser?: string) {
+    try {
+      await supabase.from('admin_activity_log').insert({
+        performed_by: profile.id,
+        performed_by_name: profile.full_name,
+        action,
+        target_user: targetUser || '',
+        created_at: new Date().toISOString()
+      })
+    } catch {}
+  }
+
   async function resetPassword() {
     if (!newPass || newPass.length < 6) { alert('סיסמא חייבת להיות לפחות 6 תווים'); return }
     const res = await fetch('/api/reset-password', {
@@ -272,7 +403,7 @@ export default function AdminPage() {
       <div style={{ padding: '22px 26px' }}>
         <div className="page-header"><div className="page-title">ניהול מערכת</div></div>
         <div className="tabs">
-          {[['users','משתמשים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות']].map(([k,v]) => (
+          {[['users','משתמשים'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']].map(([k,v]) => (
             <div key={k} className={`tab${tab===k?' active':''}`} onClick={() => setTab(k)}>{v}</div>
           ))}
         </div>
@@ -319,6 +450,7 @@ export default function AdminPage() {
                 <option value="">סנן לפי מחלקה</option>
                 {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
+              <button className="btn btn-success btn-sm" style={{ marginRight:'auto' }} onClick={exportAgentsExcel}>📥 ייצוא Excel</button>
             </div>
             <div className="card" style={{ padding: 0 }}>
               <table>
@@ -534,6 +666,14 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {tab === 'agent-stats' && (
+          <AgentStatsTab />
+        )}
+
+        {tab === 'activity' && (
+          <ActivityLogTab />
+        )}
       </div>
 
       {/* Reset password modal */}
@@ -587,4 +727,5 @@ export default function AdminPage() {
       {toast && <div className="toast">{toast}</div>}
     </>
   )
+
 }

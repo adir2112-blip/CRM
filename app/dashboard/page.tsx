@@ -568,14 +568,13 @@ function DashboardPage() {
                   <div key={c.id} onClick={() => openCase(c)} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background:'var(--bg3)', borderRadius:8, cursor:'pointer', border:'1px solid var(--border)', transition:'background 0.15s' }}
                     onMouseEnter={e => (e.currentTarget.style.background='#f0f4ff')}
                     onMouseLeave={e => (e.currentTarget.style.background='var(--bg3)')}>
-                    <div style={{ width:36, height:36, borderRadius:'50%', background:c.status_name?.includes('טופל')?'#dcfce7':'#dbeafe', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
-                      {c.status_name?.includes('טופל') ? '✅' : '⏳'}
+                    <div style={{ minWidth:64, textAlign:'center', flexShrink:0 }}>
+                      <div style={{ fontSize:13, fontWeight:800, color:'#2563eb' }}>{relativeTime(c.created_at)}</div>
+                      <div style={{ fontSize:10, color:'#94a3b8', marginTop:1 }}>{new Date(c.created_at).toLocaleDateString('he-IL')}</div>
                     </div>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:12, fontWeight:600, color:'#1e293b' }}>{c.cat1_name}{c.cat2_name ? ' › ' + c.cat2_name : ''}</div>
-                      <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>
-                        {new Date(c.created_at).toLocaleDateString('he-IL')} · {relativeTime(c.created_at)} · {c.agent_name}
-                      </div>
+                      <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>{c.agent_name} · {c.org_name?.split(' ')[0]}</div>
                     </div>
                     <span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span>
                   </div>
@@ -810,7 +809,7 @@ function DashboardPage() {
               <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:16 }}>
                 {statuses.map(s => <StatusBtn key={s.id} s={s} editStatus={editStatus} setEditStatus={setEditStatus} onSelect={(name: string) => { if(name==='בטיפול נציג') setShowAddReminder(true); else setShowAddReminder(false) }} />)}
               </div>
-              <button onClick={saveStatus} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#1d4ed8,#2563eb)', color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'Heebo,sans-serif', marginBottom:16, boxShadow:'0 4px 14px rgba(37,99,235,0.4)' }}>✓ עדכן סטטוס</button>
+              <button onClick={saveStatus} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#059669,#10b981)', color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'Heebo,sans-serif', marginBottom:16, boxShadow:'0 4px 14px rgba(5,150,105,0.4)' }}>✓ עדכן סטטוס</button>
               <div style={{ height:1, background:'var(--border)', margin:'0 0 14px 0' }} />
               <div style={{ fontSize:11, fontWeight:700, color:'var(--text2)', textTransform:'uppercase', marginBottom:10 }}>📝 תיעוד ידני</div>
               <div style={{ marginBottom:12, maxHeight:160, overflowY:'auto' }}>
@@ -1007,7 +1006,22 @@ function DashboardPage() {
               <div className="modal-title">{modalTitle}</div>
               <button className="close-btn" onClick={() => setShowListModal(false)}>✕</button>
             </div>
-            {modalList.length ? modalList.map(c => <CaseCard key={c.id} c={c} onClick={() => { setShowListModal(false); openCase(c) }} />) : <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין פניות</div>}
+            {modalList.length ? modalList.map(c => (
+              <div key={c.id} onClick={() => { setShowListModal(false); openCase(c) }}
+                style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', cursor:'pointer', borderRadius:8, background:isOverdue(c)?'#fff5f5':'var(--bg3)', border:`1px solid ${isOverdue(c)?'#fca5a5':'var(--border)'}`, marginBottom:8 }}
+                onMouseEnter={e => (e.currentTarget.style.background='#eff4ff')}
+                onMouseLeave={e => (e.currentTarget.style.background=isOverdue(c)?'#fff5f5':'var(--bg3)')}>
+                <div style={{ minWidth:70, textAlign:'center' }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#2563eb' }}>{relativeTime(c.created_at)}</div>
+                  <div style={{ fontSize:10, color:'#94a3b8', marginTop:2 }}>{new Date(c.created_at).toLocaleDateString('he-IL')}</div>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:13 }}>{c.customer_name}</div>
+                  <div style={{ fontSize:11, color:'var(--text2)', marginTop:2 }}>{c.cat1_name}{c.cat2_name?' › '+c.cat2_name:''} · {c.agent_name}</div>
+                </div>
+                <span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span>
+              </div>
+            )) : <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין פניות</div>}
           </div>
         </div>
       )}
@@ -1025,20 +1039,30 @@ function DashboardPage() {
             </div>
             <div style={{ maxHeight:460, overflowY:'auto' }}>
               <table>
-                <thead><tr><th>#</th><th>שם לקוח</th><th>טלפון</th><th>ארגון</th><th>סיווג 2</th><th>סטטוס</th><th>נציג</th><th>תאריך</th></tr></thead>
+                <thead><tr><th>#</th><th>שם לקוח</th><th>טלפון</th><th>ארגון</th><th>סיווג 2</th><th>סטטוס</th><th>נציג</th><th>תאריך</th><th style={{ textAlign:'center' }}>בדיגיטל</th></tr></thead>
                 <tbody>
-                  {recurringModal.cases.map(c => (
-                    <tr key={c.id} style={{ cursor:'pointer' }} onClick={() => { setRecurringModal(null); openCase(c) }}>
-                      <td className="td-muted">#{c.id}</td>
-                      <td style={{ fontWeight:600, color:'var(--accent)' }}>{c.customer_name}</td>
-                      <td className="td-mono">{c.phone}</td>
-                      <td><span className="badge b-gray" style={{ fontSize:10 }}>{(c.org_name||'').split(' ')[0]}</span></td>
-                      <td>{c.cat2_name}</td>
-                      <td><span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span></td>
-                      <td style={{ color:'var(--text2)' }}>{c.agent_name}</td>
-                      <td className="td-muted" style={{ whiteSpace:'nowrap', fontSize:11 }}>{fmt(c.created_at)}</td>
-                    </tr>
-                  ))}
+                  {recurringModal.cases.map(c => {
+                    const samePhone = cases.filter(x => x.phone && x.phone === c.phone)
+                    const digitalCount = samePhone.filter(x => 
+                      x.cat1_name?.includes('דיגיטל') || x.cat2_name?.includes('דיגיטל') || 
+                      x.cat1_name?.includes('אפליקציה') || x.cat2_name?.includes('אפליקציה')
+                    ).length
+                    return (
+                      <tr key={c.id} style={{ cursor:'pointer' }} onClick={() => { setRecurringModal(null); openCase(c) }}>
+                        <td className="td-muted">#{c.id}</td>
+                        <td style={{ fontWeight:600, color:'var(--accent)' }}>{c.customer_name}</td>
+                        <td className="td-mono">{c.phone}</td>
+                        <td><span className="badge b-gray" style={{ fontSize:10 }}>{(c.org_name||'').split(' ')[0]}</span></td>
+                        <td>{c.cat2_name}</td>
+                        <td><span className={`badge ${statusBadgeClass(c.status_name)}`}>{c.status_name}</span></td>
+                        <td style={{ color:'var(--text2)' }}>{c.agent_name}</td>
+                        <td className="td-muted" style={{ whiteSpace:'nowrap', fontSize:11 }}>{fmt(c.created_at)}</td>
+                        <td style={{ textAlign:'center' }}>
+                          {digitalCount > 0 ? <span className="badge b-blue">{digitalCount}</span> : <span style={{ color:'var(--text3)', fontSize:11 }}>—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

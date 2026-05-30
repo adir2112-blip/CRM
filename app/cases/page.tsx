@@ -5,6 +5,65 @@ import { useUser } from '@/lib/useUser'
 import Topbar from '@/components/Topbar'
 import { fmt, statusBadgeClass, isOverdue } from '@/lib/utils'
 
+function GlassixItem({ ticket: t }: { ticket: any }) {
+  const [expanded, setExpanded] = useState(false)
+  const [msgs, setMsgs] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const icons: Record<string,string> = { WhatsApp:'💬', Mail:'📧', Chat:'💭', SMS:'📱' }
+  const colors: Record<string,string> = { Open:'#2563eb', Closed:'#16a34a', Pending:'#d97706' }
+
+  async function toggle() {
+    if (expanded) { setExpanded(false); return }
+    if (msgs.length > 0) { setExpanded(true); return }
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/glassix-ticket?id=${t.id}`)
+      const data = await res.json()
+      setMsgs(data.messages || [])
+    } catch {}
+    setLoading(false); setExpanded(true)
+  }
+
+  return (
+    <div style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 14px', marginBottom:10, border:'1px solid var(--border)' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }} onClick={toggle}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontSize:16 }}>{icons[t.channel]||'💬'}</span>
+          <div>
+            <span style={{ fontSize:12, fontWeight:600 }}>{t.channel}</span>
+            {t.assignee && <span style={{ fontSize:11, color:'var(--text3)', marginRight:6 }}> · {t.assignee}</span>}
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <span style={{ fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:999, background:(colors[t.status]||'#6b7280')+'18', color:colors[t.status]||'#6b7280' }}>{t.status}</span>
+          <span style={{ fontSize:10, color:'var(--text3)' }}>{t.created?new Date(t.created).toLocaleDateString('he-IL'):''}</span>
+          <span style={{ fontSize:12, color:'#2563eb' }}>{loading?'⏳':expanded?'▲':'▼'}</span>
+        </div>
+      </div>
+      {t.subject && <div style={{ fontSize:12, fontWeight:500, color:'#374151', marginTop:5 }}>{t.subject}</div>}
+      {t.clientIdentifier && <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>📞 {t.clientIdentifier}</div>}
+      {expanded && (
+        <div style={{ borderTop:'1px solid var(--border)', paddingTop:10, marginTop:10, maxHeight:400, overflowY:'auto', display:'flex', flexDirection:'column', gap:8 }}>
+          {msgs.length===0 ? <div style={{ fontSize:11, color:'var(--text3)', textAlign:'center' }}>אין הודעות</div>
+          : msgs.map((m: any) => {
+            const isClient = m.type==='Client'
+            return (
+              <div key={m.id} style={{ display:'flex', flexDirection:'column', alignItems:isClient?'flex-start':'flex-end' }}>
+                <div style={{ fontSize:10, color:'var(--text3)', marginBottom:2, padding:'0 4px' }}>
+                  {isClient?'👤':'👨‍💼'} {m.sender}{m.time?` · ${m.time}`:''}
+                </div>
+                <div style={{ maxWidth:'82%', padding:'8px 12px', borderRadius:isClient?'4px 12px 12px 12px':'12px 4px 12px 12px', background:isClient?'#dbeafe':'#dcfce7', color:isClient?'#1e3a8a':'#14532d', fontSize:12, lineHeight:1.6, border:`1px solid ${isClient?'#93c5fd':'#86efac'}` }}>
+                  {m.text}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CasesPage() {
   const { profile, loading } = useUser()
   const supabase = createClient()
@@ -22,7 +81,11 @@ export default function CasesPage() {
   const [newLog, setNewLog] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [toast, setToast] = useState('')
-  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'>('details')
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'glassix'>('details')
+  const [glassixTickets, setGlassixTickets] = useState<any[]>([])
+  const [glassixLoading, setGlassixLoading] = useState(false)
+  const [glassixTotal, setGlassixTotal] = useState(0)
+  const [glassixError, setGlassixError] = useState('')
   const [smsTemplates, setSmsTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [smsText, setSmsText] = useState('')
@@ -62,6 +125,20 @@ export default function CasesPage() {
       return true
     }))
   }, [search, fStatus, fOrg, fAgent, fFrom, fTo, cases])
+
+  async function loadGlassix(c: any) {
+    setGlassixLoading(true); setGlassixError('')
+    try {
+      const params = new URLSearchParams()
+      if (c.phone) params.set('phone', c.phone)
+      if (c.id_number) params.set('id_number', c.id_number)
+      const res = await fetch(`/api/glassix?${params}`)
+      const data = await res.json()
+      if (data.error) { setGlassixError(data.error); setGlassixTickets([]) }
+      else { setGlassixTickets(data.tickets || []); setGlassixTotal(data.total || 0) }
+    } catch { setGlassixError('שגיאה בחיבור') }
+    setGlassixLoading(false)
+  }
 
   async function openCase(c: any) {
     setSelectedCase(c)
@@ -258,6 +335,9 @@ export default function CasesPage() {
                 📎 קבצים {attachments.length > 0 && <span className="badge b-gray" style={{ fontSize: 10, marginRight: 4 }}>{attachments.length}</span>}
               </div>
               <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 SMS</div>
+              <div className={`tab${caseTab==='glassix'?' active':''}`} onClick={() => { setCaseTab('glassix'); if(!glassixTickets.length && !glassixLoading) loadGlassix(selectedCase) }}>
+                🟦 Glassix {glassixTotal>0 && <span className="badge b-blue" style={{ fontSize:10, marginRight:4 }}>{glassixTotal}</span>}
+              </div>
             </div>
             {caseTab === 'details' && <>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -419,10 +499,27 @@ export default function CasesPage() {
                 }}>📱 שלח ב-WhatsApp</button>
               </div>
             )}
+
+            {caseTab === 'glassix' && (
+              <div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>🟦 שיחות Glassix {glassixTotal>0 && <span style={{ fontSize:11, color:'var(--text3)' }}>({glassixTotal})</span>}</div>
+                  <div style={{ display:'flex', gap:6 }}>
+                    <button className="btn btn-xs" style={{ background:'#fef3c7', color:'#b45309', border:'1px solid #fcd34d' }} onClick={async () => { await fetch('/api/glassix-refresh',{method:'POST'}); loadGlassix(selectedCase) }}>🔄 רענן cache</button>
+                    <button className="btn btn-xs" onClick={() => loadGlassix(selectedCase)}>רענן</button>
+                  </div>
+                </div>
+                {glassixLoading && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>⏳ טוען...</div>}
+                {glassixError && <div style={{ padding:'10px', background:'#fef2f2', borderRadius:8, fontSize:12, color:'#b91c1c' }}>⚠️ {glassixError}</div>}
+                {!glassixLoading && !glassixError && glassixTickets.length===0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>🟦 לא נמצאו שיחות</div>}
+                {glassixTickets.map((t: any) => <GlassixItem key={t.id} ticket={t} />)}
+              </div>
+            )}
           </div>
         </div>
       )}
       {toast && <div className="toast">{toast}</div>}
     </>
   )
+
 }

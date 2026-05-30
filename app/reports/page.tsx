@@ -37,7 +37,11 @@ export default function ReportsPage() {
   const [fAgent, setFAgent] = useState('')
   const [agents, setAgents] = useState<any[]>([])
 
-  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'reminder'>('details')
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'reminder'|'glassix'>('details')
+  const [glassixTickets, setGlassixTickets] = useState<any[]>([])
+  const [glassixLoading, setGlassixLoading] = useState(false)
+  const [glassixTotal, setGlassixTotal] = useState(0)
+  const [glassixError, setGlassixError] = useState('')
   const [history, setHistory] = useState<any[]>([])
   const [attachments, setAttachments] = useState<any[]>([])
   const [smsTemplates, setSmsTemplates] = useState<any[]>([])
@@ -303,6 +307,9 @@ export default function ReportsPage() {
               </div>
               <div className={`tab${caseTab==='sms'?' active':''}`} onClick={() => setCaseTab('sms')}>💬 SMS</div>
               <div className={`tab${caseTab==='reminder'?' active':''}`} onClick={() => setCaseTab('reminder')}>🔔 תזכורת</div>
+              <div className={`tab${caseTab==='glassix'?' active':''}`} onClick={() => { setCaseTab('glassix'); if(!glassixTickets.length && !glassixLoading){ setGlassixLoading(true); const p=new URLSearchParams(); if(selectedCase.phone)p.set('phone',selectedCase.phone); if(selectedCase.id_number)p.set('id_number',selectedCase.id_number); fetch(`/api/glassix?${p}`).then(r=>r.json()).then(d=>{setGlassixTickets(d.tickets||[]);setGlassixTotal(d.total||0);setGlassixLoading(false)}).catch(()=>setGlassixLoading(false)) } }}>
+                🟦 Glassix {glassixTotal>0 && <span className="badge b-blue" style={{ fontSize:10, marginRight:4 }}>{glassixTotal}</span>}
+              </div>
             </div>
 
             {caseTab==='details' && <>
@@ -324,7 +331,7 @@ export default function ReportsPage() {
                   return <button key={s.id} onClick={() => setEditStatus(s.name)} style={{ padding:'7px 16px', borderRadius:8, fontSize:12, fontWeight:sel?700:500, cursor:'pointer', fontFamily:'Heebo,sans-serif', background:sel?st.ab:st.bg, color:sel?'#fff':st.c, border:`1.5px solid ${sel?st.ab:st.b}`, boxShadow:sel?`0 3px 10px ${st.ab}50`:'none', outline:'none' }}>{s.name}</button>
                 })}
               </div>
-              <button onClick={saveStatus} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#1d4ed8,#2563eb)', color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'Heebo,sans-serif', marginBottom:16, boxShadow:'0 4px 14px rgba(37,99,235,0.4)' }}>✓ עדכן סטטוס</button>
+              <button onClick={saveStatus} style={{ width:'100%', padding:'11px 0', borderRadius:10, border:'none', background:'linear-gradient(135deg,#059669,#10b981)', color:'#fff', fontSize:15, fontWeight:800, cursor:'pointer', fontFamily:'Heebo,sans-serif', marginBottom:16, boxShadow:'0 4px 14px rgba(5,150,105,0.4)' }}>✓ עדכן סטטוס</button>
               <div style={{ height:1, background:'var(--border)', margin:'0 0 14px 0' }} />
               <div style={{ fontSize:11, fontWeight:700, color:'var(--text2)', textTransform:'uppercase', marginBottom:10 }}>📝 תיעוד ידני</div>
               <div style={{ marginBottom:12, maxHeight:160, overflowY:'auto' }}>
@@ -388,6 +395,35 @@ export default function ReportsPage() {
                 <div className="form-group"><label className="form-label">תאריך ושעה *</label><input className="form-input" type="datetime-local" value={newReminder.remind_at} onChange={e => setNewReminder(p=>({...p,remind_at:e.target.value}))} /></div>
                 <div className="form-group"><label className="form-label">הערה *</label><textarea className="form-input" rows={3} value={newReminder.note} onChange={e => setNewReminder(p=>({...p,note:e.target.value}))} placeholder="לדוגמא: לחזור ולוודא קבלת חבילה..." /></div>
                 <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center' }} onClick={saveReminder}>🔔 שמור תזכורת</button>
+              </div>
+            )}
+
+            {caseTab==='glassix' && (
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>🟦 Glassix {glassixTotal>0 && <span style={{ fontSize:11, color:'var(--text3)' }}>({glassixTotal})</span>}</div>
+                  <button className="btn btn-xs" style={{ background:'#fef3c7', color:'#b45309', border:'1px solid #fcd34d' }} onClick={async () => { await fetch('/api/glassix-refresh',{method:'POST'}); setGlassixLoading(true); const p=new URLSearchParams(); if(selectedCase.phone)p.set('phone',selectedCase.phone); fetch(`/api/glassix?${p}`).then(r=>r.json()).then(d=>{setGlassixTickets(d.tickets||[]);setGlassixTotal(d.total||0);setGlassixLoading(false)}).catch(()=>setGlassixLoading(false)) }}>🔄 רענן</button>
+                </div>
+                {glassixLoading && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>⏳ טוען...</div>}
+                {glassixError && <div style={{ padding:'10px', background:'#fef2f2', borderRadius:8, fontSize:12, color:'#b91c1c' }}>⚠️ {glassixError}</div>}
+                {!glassixLoading && glassixTickets.length===0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>🟦 לא נמצאו שיחות</div>}
+                {glassixTickets.map((t: any) => (
+                  <div key={t.id} style={{ background:'var(--bg3)', borderRadius:10, padding:'12px 14px', marginBottom:10, border:'1px solid var(--border)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontSize:16 }}>{t.channel==='WhatsApp'?'💬':t.channel==='Mail'?'📧':'💭'}</span>
+                        <span style={{ fontSize:12, fontWeight:600 }}>{t.channel}</span>
+                        {t.assignee && <span style={{ fontSize:11, color:'var(--text3)' }}> · {t.assignee}</span>}
+                      </div>
+                      <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                        <span style={{ fontSize:11, padding:'2px 8px', borderRadius:999, background:t.status==='Closed'?'#dcfce7':'#dbeafe', color:t.status==='Closed'?'#16a34a':'#2563eb', fontWeight:600 }}>{t.status}</span>
+                        <span style={{ fontSize:10, color:'var(--text3)' }}>{t.created?new Date(t.created).toLocaleDateString('he-IL'):''}</span>
+                      </div>
+                    </div>
+                    {t.subject && <div style={{ fontSize:12, marginTop:6, color:'#374151' }}>{t.subject}</div>}
+                    {t.clientIdentifier && <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>📞 {t.clientIdentifier}</div>}
+                  </div>
+                ))}
               </div>
             )}
           </div>
