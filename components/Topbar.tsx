@@ -151,7 +151,10 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
                     onMouseLeave={e => (e.currentTarget.style.background='#fff')}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                       <span style={{ fontWeight:600, fontSize:13, color:'#111827' }}>{c.customer_name}</span>
-                      <span style={{ fontSize:12, color:'#2563eb', fontWeight:800 }}>{relativeTime(c.updated_at)}</span>
+                      <div style={{ textAlign:'left' }}>
+                        <div style={{ fontSize:12, color:'#2563eb', fontWeight:800 }}>{relativeTime(c.updated_at)}</div>
+                        <div style={{ fontSize:10, color:'#9ca3af' }}>{new Date(c.updated_at).toLocaleString('he-IL',{timeZone:'Asia/Jerusalem',day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+                      </div>
                     </div>
                     <div style={{ display:'flex', gap:8, marginTop:3, alignItems:'center' }}>
                       <span style={{ fontSize:11, color:'#6b7280', direction:'ltr' }}>{c.phone}</span>

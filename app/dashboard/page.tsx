@@ -211,11 +211,18 @@ function DashboardPage() {
     if (!query) return
     setSmartLoading(true)
     const qPhone = query.replace(/\D/g, '')
-    const matched = cases.filter(c =>
-      c.customer_name?.toLowerCase().includes(query.toLowerCase()) ||
-      (qPhone.length >= 7 && c.phone?.replace(/\D/g,'').includes(qPhone)) ||
-      c.id_number?.includes(query)
-    )
+
+    // Get agent's allowed orgs
+    const { data: myProfile } = await supabase.from('profiles').select('allowed_orgs').eq('id', profile.id).single()
+    const allowedOrgs = myProfile?.allowed_orgs
+
+    const matched = cases.filter(c => {
+      // Filter by allowed orgs
+      if (allowedOrgs?.length > 0 && !allowedOrgs.includes(c.org_id)) return false
+      return c.customer_name?.toLowerCase().includes(query.toLowerCase()) ||
+        (qPhone.length >= 7 && c.phone?.replace(/\D/g,'').includes(qPhone)) ||
+        c.id_number?.includes(query)
+    })
     if (matched.length === 0) { setSmartResult(null); setSmartLoading(false); return }
 
     const first = matched[0]
