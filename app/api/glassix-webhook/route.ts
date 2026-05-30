@@ -52,11 +52,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true })
   } catch (e: any) {
     // Save error to debug table too
-    await supabase.from('webhook_log').upsert({
-      id: Date.now().toString(),
-      received_at: new Date().toISOString(),
-      body: `ERROR: ${e.message} | RAW: ${rawBody.slice(0, 1000)}`
-    }, { onConflict: 'id' }).catch(() => {})
+    try {
+      await supabase.from('webhook_log').upsert({
+        id: Date.now().toString(),
+        received_at: new Date().toISOString(),
+        body: `ERROR: ${e.message} | RAW: ${rawBody.slice(0, 1000)}`
+      }, { onConflict: 'id' })
+    } catch {}
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
