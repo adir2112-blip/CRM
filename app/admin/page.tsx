@@ -973,5 +973,3 @@ export default function AdminPage() {
     </>
   )
 
-}
-}
