@@ -226,10 +226,11 @@ function DashboardPage() {
     if (matched.length === 0) { setSmartResult(null); setSmartLoading(false); return }
 
     const first = matched[0]
-    const customerCases = cases.filter(c =>
-      (first.phone && c.phone === first.phone) ||
-      (!first.phone && first.id_number && c.id_number === first.id_number)
-    ).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    const customerCases = cases.filter(c => {
+      if (allowedOrgs?.length > 0 && !allowedOrgs.includes(c.org_id)) return false
+      return (first.phone && c.phone === first.phone) ||
+        (!first.phone && first.id_number && c.id_number === first.id_number)
+    }).sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     const now = new Date()
     const sevenDaysAgo = new Date(now.getTime() - 7 * 864e5)
