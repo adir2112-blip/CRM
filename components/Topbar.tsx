@@ -51,6 +51,14 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     async function startSession() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
+
+      // Close any existing active sessions for this user
+      await supabase.from('user_sessions')
+        .update({ logout_at: new Date().toISOString(), is_active: false })
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .is('logout_at', null)
+
       const { data: prof } = await supabase.from('profiles').select('full_name, allowed_orgs').eq('id', user.id).single()
       let orgNames = ''
       if (prof?.allowed_orgs?.length > 0) {
@@ -66,7 +74,12 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
 
     async function ping() {
       const sid = sessionId || localStorage.getItem('crm_session_id')
-      if (sid) await supabase.from('user_sessions').update({ last_ping: new Date().toISOString() }).eq('id', sid)
+      if (!sid) return
+      // Auto-logout at 18:00
+      const now = new Date()
+      const israelHour = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' })).getHours()
+      if (israelHour >= 18) { endSession(); return }
+      await supabase.from('user_sessions').update({ last_ping: now.toISOString() }).eq('id', sid)
     }
 
     async function endSession() {
@@ -74,6 +87,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
       if (sid) {
         await supabase.from('user_sessions').update({ logout_at: new Date().toISOString(), is_active: false }).eq('id', sid)
         localStorage.removeItem('crm_session_id')
+        sessionId = null
       }
     }
 
