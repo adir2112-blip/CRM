@@ -1,58 +1,51 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const WORKSPACE = process.env.GLASSIX_WORKSPACE || 'm4l-il'
-const BASE_URL = `https://${WORKSPACE}.glassix.com`
-const API_KEY = process.env.GLASSIX_API_KEY!
-const API_SECRET = process.env.GLASSIX_API_SECRET!
-const USERNAME = process.env.GLASSIX_USERNAME!
-const CACHE_KEY = `glassix_tickets_${WORKSPACE}`
-const CACHE_MINUTES = 5
-
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-async function getToken(): Promise<string> {
-  const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ apiKey: API_KEY, apiSecret: API_SECRET, userName: USERNAME })
-  })
-  if (!res.ok) throw new Error('Glassix token error: ' + await res.text())
-  const data = await res.json()
-  return data.access_token
-}
+const BASE_URL = `https://${process.env.GLASSIX_WORKSPACE || 'm4l-il'}.glassix.com`
+const CACHE_KEY = `glassix_tickets_${process.env.GLASSIX_WORKSPACE || 'm4l-il'}`
+const CACHE_TTL = 5 * 60 * 1000
 
 function toGlassixDate(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:00:00`
+  return d.toISOString().replace('T', ' ').replace('Z', '').split('.')[0]
+}
+
+async function getToken(): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: process.env.GLASSIX_API_KEY, apiSecret: process.env.GLASSIX_API_SECRET, userName: process.env.GLASSIX_USERNAME, workspace: process.env.GLASSIX_WORKSPACE || 'm4l-il' })
+    })
+    const data = await res.json()
+    return data.token || null
+  } catch { return null }
 }
 
 async function getTicketsWithCache(): Promise<any[]> {
   // Check cache
   try {
-    const { data: cached } = await supabase
-      .from('glassix_cache')
-      .select('tickets, updated_at')
-      .eq('cache_key', CACHE_KEY)
-      .single()
-    if (cached) {
-      const age = (Date.now() - new Date(cached.updated_at).getTime()) / 60000
-      if (age < CACHE_MINUTES) return JSON.parse(cached.tickets)
+    const { data: cached } = await supabase.from('glassix_cache').select('tickets, updated_at').eq('cache_key', CACHE_KEY).single()
+    if (cached?.tickets && cached?.updated_at) {
+      const age = Date.now() - new Date(cached.updated_at).getTime()
+      if (age < CACHE_TTL) {
+        const parsed = JSON.parse(cached.tickets)
+        if (parsed.length > 0) return parsed
+      }
     }
   } catch {}
 
   const token = await getToken()
+  if (!token) return []
+
   const now = new Date()
   const monthAgo = new Date(now.getTime() - 28 * 864e5)
-  const since = toGlassixDate(monthAgo)
-  const until = toGlassixDate(now)
-
   let allTickets: any[] = []
   let hitRateLimit = false
-  let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
+  let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(toGlassixDate(monthAgo))}&until=${encodeURIComponent(toGlassixDate(now))}&statuses=open,closed,snoozed`
 
   let pages = 0
   while (url && pages < 15) {
@@ -68,26 +61,19 @@ async function getTicketsWithCache(): Promise<any[]> {
     pages++
   }
 
-  // Don't save empty cache if we hit rate limit — keep existing cache
   if (hitRateLimit && allTickets.length === 0) {
     try {
       const { data: existing } = await supabase.from('glassix_cache').select('tickets').eq('cache_key', CACHE_KEY).single()
-      if (existing?.tickets) {
-        const parsed = JSON.parse(existing.tickets)
-        if (parsed.length > 0) return parsed
-      }
+      if (existing?.tickets) { const p = JSON.parse(existing.tickets); if (p.length > 0) return p }
     } catch {}
-    // No cache available — return empty but don't save empty cache
     return []
   }
 
-  try {
-    await supabase.from('glassix_cache').upsert({
-      cache_key: CACHE_KEY,
-      tickets: JSON.stringify(allTickets),
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'cache_key' })
-  } catch {}
+  if (allTickets.length > 0) {
+    try {
+      await supabase.from('glassix_cache').upsert({ cache_key: CACHE_KEY, tickets: JSON.stringify(allTickets), updated_at: new Date().toISOString() }, { onConflict: 'cache_key' })
+    } catch {}
+  }
 
   return allTickets
 }
@@ -99,9 +85,7 @@ export async function GET(request: Request) {
     const email = searchParams.get('email')
     const idNumber = searchParams.get('id_number')
 
-    if (!phone && !email && !idNumber) {
-      return NextResponse.json({ error: 'נדרש פרמטר חיפוש' }, { status: 400 })
-    }
+    if (!phone && !email && !idNumber) return NextResponse.json({ error: 'נדרש פרמטר חיפוש' }, { status: 400 })
 
     const allTickets = await getTicketsWithCache()
     const phoneNorm = phone ? phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '') : null
@@ -120,32 +104,74 @@ export async function GET(request: Request) {
       })
     })
 
-    // Fallback: if no tickets found in list cache, show message
-    if (matched.length === 0) {
-      return NextResponse.json({ total: 0, tickets: [], rateLimitNote: true })
+    // Fallback: search glassix_messages DB by phone
+    if (matched.length === 0 && phone) {
+      const phoneClean = phone.replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
+      
+      const { data: allMsgs } = await supabase
+        .from('glassix_messages')
+        .select('ticket_id, sender_name, sender_type, text, created_at, client_phone, ticket_data')
+        .order('created_at', { ascending: false })
+        .limit(5000)
+
+      const matchedMsgs = (allMsgs || []).filter((m: any) => {
+        // Check client_phone field
+        if (m.client_phone) {
+          const cp = m.client_phone.replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
+          if (cp === phoneClean) return true
+        }
+        // Check ticket_data JSON
+        try {
+          const td = JSON.parse(m.ticket_data || '{}')
+          const id = (td.clientPhone || td.participant?.identifier || '').replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
+          if (id && id === phoneClean) return true
+        } catch {}
+        // Check if Client sender — their identifier might be phone
+        if (m.sender_type === 'Client') {
+          try {
+            const td = JSON.parse(m.ticket_data || '{}')
+            const id = (td.participant?.identifier || '').replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
+            if (id && id === phoneClean) return true
+          } catch {}
+        }
+        return false
+      })
+
+      if (matchedMsgs.length > 0) {
+        const ticketIds = Array.from(new Set(matchedMsgs.map((m: any) => m.ticket_id)))
+        const tickets = ticketIds.map(tid => {
+          const tMsgs = matchedMsgs.filter((m: any) => m.ticket_id === tid)
+            .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+          const agentMsg = tMsgs.find((m: any) => m.sender_type === 'Agent')
+          const clientMsg = tMsgs.find((m: any) => m.sender_type === 'Client')
+          return {
+            id: tid, status: 'Open', channel: 'WhatsApp',
+            subject: tMsgs[tMsgs.length-1]?.text?.slice(0,60) || '',
+            created: tMsgs[0]?.created_at,
+            updated: tMsgs[tMsgs.length-1]?.created_at,
+            assignee: agentMsg?.sender_name || '',
+            clientName: clientMsg?.sender_name || '',
+            clientIdentifier: phone, fromDB: true
+          }
+        })
+        return NextResponse.json({ total: tickets.length, tickets })
+      }
     }
+
+    if (matched.length === 0) return NextResponse.json({ total: 0, tickets: [] })
 
     const formatted = matched.slice(0, 20).map((t: any) => {
       const clientPart = (t.participants || []).find((p: any) => p.type === 'Client')
-      const agentPart = (t.participants || []).find((p: any) => 
-        p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט'
-      )
+      const agentPart = (t.participants || []).find((p: any) => p.type === 'User' && !p.userName?.includes('@glassix.bot') && p.name !== 'בוט')
       return {
-        id: t.id,
-        status: t.state,
-        channel: t.primaryProtocolType || 'WhatsApp',
-        subject: t.field1 || '',
-        created: t.open,
-        updated: t.lastActivity,
+        id: t.id, status: t.state, channel: t.primaryProtocolType || 'WhatsApp',
+        subject: t.field1 || '', created: t.open, updated: t.lastActivity,
         assignee: agentPart?.displayName || agentPart?.name || t.owner?.fullName || '',
-        clientName: clientPart?.name || '',
-        clientIdentifier: clientPart?.identifier || '',
-        messages: []
+        clientName: clientPart?.name || '', clientIdentifier: clientPart?.identifier || '', messages: []
       }
     })
 
     return NextResponse.json({ total: matched.length, tickets: formatted })
-
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
