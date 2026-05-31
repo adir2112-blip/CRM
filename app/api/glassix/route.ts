@@ -70,12 +70,15 @@ async function getTicketsWithCache(): Promise<any[]> {
 
   // Don't save empty cache if we hit rate limit — keep existing cache
   if (hitRateLimit && allTickets.length === 0) {
-    // Return existing cached data if available
     try {
       const { data: existing } = await supabase.from('glassix_cache').select('tickets').eq('cache_key', CACHE_KEY).single()
-      if (existing?.tickets) return JSON.parse(existing.tickets)
+      if (existing?.tickets) {
+        const parsed = JSON.parse(existing.tickets)
+        if (parsed.length > 0) return parsed
+      }
     } catch {}
-    throw new Error('Rate limit — נסה שוב בעוד דקה')
+    // No cache available — return empty but don't save empty cache
+    return []
   }
 
   try {
@@ -104,7 +107,7 @@ export async function GET(request: Request) {
     const phoneNorm = phone ? phone.replace(/\D/g, '').replace(/^972/, '').replace(/^0/, '') : null
     const emailNorm = email ? email.toLowerCase() : null
 
-    const matched = allTickets.filter((t: any) => {
+    let matched = allTickets.filter((t: any) => {
       return (t.participants || []).some((p: any) => {
         if (p.type !== 'Client' || !p.identifier) return false
         if (phoneNorm) {
@@ -116,6 +119,45 @@ export async function GET(request: Request) {
         return false
       })
     })
+
+    // Fallback: if no tickets found in cache, check glassix_messages table (from webhook)
+    if (matched.length === 0 && (phone || idNumber)) {
+      const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      let msgQuery = supabase.from('glassix_messages').select('ticket_id, text, sender_name, sender_type, created_at').order('created_at', { ascending: false })
+      
+      // Get all messages and group by ticket_id
+      const { data: msgs } = await msgQuery
+      if (msgs && msgs.length > 0) {
+        // Group messages by ticket_id
+        const byTicket: Record<string, any[]> = {}
+        msgs.forEach((m: any) => {
+          if (!byTicket[m.ticket_id]) byTicket[m.ticket_id] = []
+          byTicket[m.ticket_id].push(m)
+        })
+        
+        // Check if phone matches any ticket's participant
+        // Since webhook doesn't store phone, return tickets from webhook if we got any today
+        const todayTickets = Object.entries(byTicket).map(([ticketId, messages]) => ({
+          id: ticketId,
+          status: 'Open',
+          channel: 'WhatsApp',
+          subject: messages[0]?.text?.slice(0, 50) || '',
+          created: messages[messages.length-1]?.created_at,
+          updated: messages[0]?.created_at,
+          assignee: messages.find((m:any) => m.sender_type === 'Agent')?.sender_name || '',
+          clientName: messages.find((m:any) => m.sender_type === 'Client')?.sender_name || '',
+          clientIdentifier: phone || '',
+          fromWebhook: true
+        }))
+        
+        if (todayTickets.length > 0) {
+          return NextResponse.json({ total: todayTickets.length, tickets: todayTickets, fromWebhook: true })
+        }
+      }
+    }
 
     const formatted = matched.slice(0, 20).map((t: any) => {
       const clientPart = (t.participants || []).find((p: any) => p.type === 'Client')
