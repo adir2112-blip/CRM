@@ -15,19 +15,25 @@ export function businessDaysBetween(d1: Date, d2: Date): number {
   return count
 }
 
+const CLOSED_STATUSES = ['טופל', 'טופל לאחר שיחת מנהל']
+const MGR_WAIT_STATUSES = ['הועבר לשיחת מנהל', 'ממתין לשיחת מנהל']
+const MGR_ACTIVE_STATUSES = ['בטיפול בשיחת מנהל', 'בטיפול לאחר שיחת מנהל']
+const MGR_ALL_STATUSES = [...MGR_WAIT_STATUSES, ...MGR_ACTIVE_STATUSES]
+
 export function isOverdue(c: any): boolean {
   if (!c) return false
-  if (c.status_name === 'טופל' || c.status_name === 'טופל לאחר שיחת מנהל') return false
+  if (CLOSED_STATUSES.includes(c.status_name)) return false
+  if (MGR_ALL_STATUSES.includes(c.status_name)) return false // handled separately
   return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 
 export function isMgrWaitOverdue(c: any): boolean {
-  if (c.status_name !== 'הועבר לשיחת מנהל' && c.status_name !== 'ממתין לשיחת מנהל') return false
+  if (!MGR_WAIT_STATUSES.includes(c.status_name)) return false
   return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 
 export function isMgrActiveOverdue(c: any): boolean {
-  if (c.status_name !== 'בטיפול בשיחת מנהל' && c.status_name !== 'בטיפול לאחר שיחת מנהל') return false
+  if (!MGR_ACTIVE_STATUSES.includes(c.status_name)) return false
   return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 

@@ -97,7 +97,9 @@ export default function NewCasePage() {
     const missing: string[] = []
     if (!form.customer_name) missing.push('שם לקוח')
     if (!form.phone) missing.push('טלפון')
+    else if (form.phone.replace(/\D/g,'').length !== 10) missing.push('טלפון חייב להיות 10 ספרות')
     if (!form.id_number) missing.push('תעודת זהות')
+    else if (form.id_number.replace(/\D/g,'').length !== 9) missing.push('תעודת זהות חייבת להיות 9 ספרות')
     if (!form.org_id) missing.push('ארגון')
     if (!form.status_id) missing.push('סטטוס')
     if (!form.subject) missing.push('נושא')
@@ -146,7 +148,7 @@ export default function NewCasePage() {
   return (
     <>
       <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} userEmail={profile?.email || ''} />
-      <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #eff6ff 0%, #f5f3ff 50%, #f0fdfa 100%)', padding: '28px 24px' }}>
+      <div style={{ minHeight: '100vh', background: '#f1f5f9', padding: '28px 24px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
           {/* Header */}
@@ -154,7 +156,7 @@ export default function NewCasePage() {
             <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: '#fff', color: '#475569', fontSize: 13, fontWeight: 600, textDecoration: 'none', fontFamily: 'Heebo, sans-serif', boxShadow: '0 1px 4px rgba(0,0,0,0.08)', border: '1px solid #e2e8f0' }}>← חזרה</a>
             <div>
               <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0 }}>פניה חדשה</h1>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>מלא את כל השדות המסומנים ב-*</div>
+              <div style={{ fontSize: 12, color: '#475569', marginTop: 2 }}>מלא את כל השדות המסומנים ב-*</div>
             </div>
           </div>
 
@@ -185,7 +187,7 @@ export default function NewCasePage() {
 
           {/* Main card */}
           <form onSubmit={handleSubmit}>
-            <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.07)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+            <div style={{ background: '#fff', border: '2px solid #94a3b8', borderRadius: 16, boxShadow: '0 4px 24px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
 
               {/* Section 1: Customer */}
               <div style={{ padding: '28px 32px', borderBottom: '1px solid #f1f5f9' }}>
@@ -198,33 +200,35 @@ export default function NewCasePage() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>שם לקוח מלא *</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>שם לקוח מלא *</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>👤</span>
-                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="שם מלא" onFocus={e => { e.target.style.borderColor='#2563eb'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc' }} />
+                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="שם מלא" onFocus={e => { e.target.style.borderColor='#2563eb'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc' }} />
                     </div>
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>מספר טלפון *</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>מספר טלפון *</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>📱</span>
-                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="05X-XXXXXXX" dir="ltr" onFocus={e => { e.target.style.borderColor='#2563eb'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc' }} />
+                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: `1.5px solid ${form.phone && form.phone.replace(/\D/g,'').length !== 10 ? '#fca5a5' : '#e2e8f0'}`, fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="05X-XXXXXXX" dir="ltr" maxLength={11} onFocus={e => { e.target.style.borderColor='#2563eb'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor= form.phone && form.phone.replace(/\D/g,'').length !== 10 ? '#fca5a5' : '#e2e8f0'; e.target.style.background='#f8fafc' }} />
+                      {form.phone && form.phone.replace(/\D/g,'').length !== 10 && <div style={{ fontSize:10, color:'#dc2626', marginTop:3 }}>נדרש 10 ספרות ({form.phone.replace(/\D/g,'').length}/10)</div>}
                     </div>
                   </div>
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>תעודת זהות *</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>תעודת זהות *</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>🪪</span>
-                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.id_number} onChange={e => setForm(f => ({ ...f, id_number: e.target.value }))} placeholder="9 ספרות" maxLength={9} onFocus={e => { e.target.style.borderColor='#2563eb'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc' }} />
+                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: `1.5px solid ${form.id_number && form.id_number.replace(/\D/g,'').length !== 9 ? '#fca5a5' : '#e2e8f0'}`, fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.id_number} onChange={e => setForm(f => ({ ...f, id_number: e.target.value.replace(/\D/g,'') }))} placeholder="9 ספרות" maxLength={9} onFocus={e => { e.target.style.borderColor='#2563eb'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor= form.id_number && form.id_number.replace(/\D/g,'').length !== 9 ? '#fca5a5' : '#e2e8f0'; e.target.style.background='#f8fafc' }} />
+                      {form.id_number && form.id_number.replace(/\D/g,'').length !== 9 && <div style={{ fontSize:10, color:'#dc2626', marginTop:3 }}>נדרש 9 ספרות ({form.id_number.replace(/\D/g,'').length}/9)</div>}
                     </div>
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>ארגון / פעילות *</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>ארגון / פעילות *</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>🏢</span>
-                      <select style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: form.org_id ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const, boxSizing: 'border-box' as const }} value={form.org_id} onChange={e => handleOrgChange(e.target.value)}>
+                      <select style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: form.org_id ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const, boxSizing: 'border-box' as const }} value={form.org_id} onChange={e => handleOrgChange(e.target.value)}>
                         <option value="">בחר ארגון</option>
                         {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                       </select>
@@ -244,23 +248,23 @@ export default function NewCasePage() {
                 </div>
                 <div className="form-row">
                   <div className="form-group">
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>סטטוס *</label>
-                    <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: form.status_id ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const }} value={form.status_id} onChange={e => { const s = statuses.find(x => x.id === e.target.value); setForm(f => ({ ...f, status_id: e.target.value, status_name: s?.name || '' })) }}>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>סטטוס *</label>
+                    <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: form.status_id ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const }} value={form.status_id} onChange={e => { const s = statuses.find(x => x.id === e.target.value); setForm(f => ({ ...f, status_id: e.target.value, status_name: s?.name || '' })) }}>
                       <option value="">בחר סטטוס</option>
                       {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                   <div className="form-group">
-                    <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>נושא הפניה *</label>
+                    <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>נושא הפניה *</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>✏️</span>
-                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="נושא קצר ותמציתי" onFocus={e => { e.target.style.borderColor='#7c3aed'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc' }} />
+                      <input style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', boxSizing: 'border-box' as const }} value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="נושא קצר ותמציתי" onFocus={e => { e.target.style.borderColor='#7c3aed'; e.target.style.background='#fff' }} onBlur={e => { e.target.style.borderColor='#e2e8f0'; e.target.style.background='#f8fafc' }} />
                     </div>
                   </div>
                 </div>
                 <div className="form-group">
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>תוכן הפניה *</label>
-                  <textarea style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#f8fafc', color: '#1e293b', outline: 'none', resize: 'vertical' as const, lineHeight: 1.6 }} rows={4} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="תאר את הפניה בפירוט — מה קרה, מה הלקוח צריך..." onFocus={e => { (e.target as any).style.borderColor='#7c3aed'; (e.target as any).style.background='#fff' }} onBlur={e => { (e.target as any).style.borderColor='#e2e8f0'; (e.target as any).style.background='#f8fafc' }} />
+                  <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>תוכן הפניה *</label>
+                  <textarea style={{ width: '100%', padding: '12px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', resize: 'vertical' as const, lineHeight: 1.6 }} rows={4} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} placeholder="תאר את הפניה בפירוט — מה קרה, מה הלקוח צריך..." onFocus={e => { (e.target as any).style.borderColor='#7c3aed'; (e.target as any).style.background='#fff' }} onBlur={e => { (e.target as any).style.borderColor='#e2e8f0'; (e.target as any).style.background='#f8fafc' }} />
                 </div>
               </div>
 
@@ -280,8 +284,8 @@ export default function NewCasePage() {
                     { label: 'סיווג שלישי *', value: form.cat3_id, disabled: !form.cat2_id, list: cat3List, onChange: handleCat3Change, placeholder: form.cat2_id ? 'בחר' : 'בחר סיווג שני', dynamic: true },
                   ].map(f2 => (
                     <div key={f2.label} className="form-group">
-                      <label style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>{f2.label}</label>
-                      <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #e2e8f0', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: f2.disabled ? '#f1f5f9' : '#f8fafc', color: f2.value ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const, opacity: f2.disabled ? 0.6 : 1 }} value={f2.value} onChange={e => f2.onChange(e.target.value)} disabled={f2.disabled}>
+                      <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>{f2.label}</label>
+                      <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: f2.disabled ? '#f1f5f9' : '#f8fafc', color: f2.value ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const, opacity: f2.disabled ? 0.6 : 1 }} value={f2.value} onChange={e => f2.onChange(e.target.value)} disabled={f2.disabled}>
                         <option value="">{f2.placeholder}</option>
                         {f2.list.map((c: any) => <option key={c.id} value={c.id}>{c.name}{f2.dynamic && c.opens_dynamic ? ' 📦' : ''}</option>)}
                       </select>
@@ -313,12 +317,12 @@ export default function NewCasePage() {
               </div>
 
               {/* Footer buttons */}
-              <div style={{ padding: '20px 32px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '20px 32px', background: '#fff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: 12, color: '#94a3b8' }}>
                   {step === 1 ? '📝 מלא פרטי לקוח להמשיך' : step === 2 ? '📋 מלא פרטי פניה' : '✅ מוכן לשמירה!'}
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
-                  <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', padding: '11px 24px', borderRadius: 10, background: '#fff', color: '#475569', fontSize: 14, fontWeight: 600, textDecoration: 'none', fontFamily: 'Heebo, sans-serif', border: '1.5px solid #e2e8f0' }}>ביטול</a>
+                  <a href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', padding: '11px 24px', borderRadius: 10, background: '#fff', color: '#475569', fontSize: 14, fontWeight: 600, textDecoration: 'none', fontFamily: 'Heebo, sans-serif', border: '2px solid #cbd5e1' }}>ביטול</a>
                   <button type="submit" disabled={saving} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '11px 36px', borderRadius: 10, border: 'none', background: saving ? '#94a3b8' : 'linear-gradient(135deg, #059669, #10b981)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'Heebo, sans-serif', boxShadow: saving ? 'none' : '0 4px 18px rgba(5,150,105,0.35)', letterSpacing: '0.3px' }}>
                     {saving ? '⏳ שומר...' : '💾 שמור פניה'}
                   </button>
