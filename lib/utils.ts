@@ -22,8 +22,7 @@ const MGR_ALL_STATUSES = [...MGR_WAIT_STATUSES, ...MGR_ACTIVE_STATUSES]
 
 export function isOverdue(c: any): boolean {
   if (!c) return false
-  if (CLOSED_STATUSES.includes(c.status_name)) return false
-  if (MGR_ALL_STATUSES.includes(c.status_name)) return false // handled separately
+  if (c.status_name !== 'בטיפול נציג') return false
   return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 

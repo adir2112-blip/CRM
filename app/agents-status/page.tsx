@@ -37,8 +37,8 @@ export default function AgentsStatusPage() {
 
   function isOverdue(c: any) {
     if (!c) return false
-    if (c.status_name === 'טופל' || c.status_name === 'טופל לאחר שיחת מנהל') return false
-    return businessDaysBetween(new Date(c.created_at), new Date(c.updated_at)) > 2
+    if (c.status_name !== 'בטיפול נציג') return false
+    return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
   }
 
   async function openCase(c: any) {
