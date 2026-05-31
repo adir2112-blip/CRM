@@ -51,12 +51,13 @@ async function getTicketsWithCache(): Promise<any[]> {
   const until = toGlassixDate(now)
 
   let allTickets: any[] = []
+  let hitRateLimit = false
   let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open,closed,snoozed`
 
   let pages = 0
   while (url && pages < 15) {
     const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
-    if (res.status === 429) break
+    if (res.status === 429) { hitRateLimit = true; break }
     if (!res.ok) break
     const data = await res.json()
     const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
@@ -65,6 +66,16 @@ async function getTicketsWithCache(): Promise<any[]> {
     const next = data.paging?.next || null
     url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
     pages++
+  }
+
+  // Don't save empty cache if we hit rate limit — keep existing cache
+  if (hitRateLimit && allTickets.length === 0) {
+    // Return existing cached data if available
+    try {
+      const { data: existing } = await supabase.from('glassix_cache').select('tickets').eq('cache_key', CACHE_KEY).single()
+      if (existing?.tickets) return JSON.parse(existing.tickets)
+    } catch {}
+    throw new Error('Rate limit — נסה שוב בעוד דקה')
   }
 
   try {
