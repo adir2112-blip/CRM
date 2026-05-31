@@ -155,10 +155,23 @@ function AgentStatsTab() {
       let query = supabase.from('cases').select('agent_name, status_name, created_at').gte('created_at', from).lte('created_at', to + 'T23:59:59')
       if (orgFilter) query = query.eq('org_id', orgFilter)
       const { data } = await query
+      // Get sessions for the period to calculate hours worked
+      const { data: sessions } = await supabase.from('user_sessions')
+        .select('user_id, user_name, login_at, logout_at, last_ping, is_active')
+        .gte('login_at', from).lte('login_at', to + 'T23:59:59')
+      
+      // Calculate hours per agent
+      const hoursByAgent: Record<string, number> = {}
+      ;(sessions || []).forEach((s: any) => {
+        const end = s.logout_at ? new Date(s.logout_at) : new Date(s.last_ping || s.login_at)
+        const mins = Math.max(0, Math.round((end.getTime() - new Date(s.login_at).getTime()) / 60000))
+        hoursByAgent[s.user_name] = (hoursByAgent[s.user_name] || 0) + Math.floor(mins / 60)
+      })
+
       const byAgent: Record<string, any> = {}
       ;(data || []).forEach((c: any) => {
         if (!c.agent_name) return
-        if (!byAgent[c.agent_name]) byAgent[c.agent_name] = { name: c.agent_name, total: 0, closed: 0 }
+        if (!byAgent[c.agent_name]) byAgent[c.agent_name] = { name: c.agent_name, total: 0, closed: 0, hours: hoursByAgent[c.agent_name] || 0 }
         byAgent[c.agent_name].total++
         if (c.status_name?.includes('טופל')) byAgent[c.agent_name].closed++
       })
@@ -186,24 +199,42 @@ function AgentStatsTab() {
       {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div> : (
         <div className="card" style={{ padding:0 }}>
           <table>
-            <thead><tr><th>נציג</th><th style={{ textAlign:'center' }}>סה"כ פניות</th><th style={{ textAlign:'center' }}>טופלו</th><th style={{ textAlign:'center' }}>אחוז טיפול</th></tr></thead>
+            <thead><tr><th>נציג</th><th style={{ textAlign:'center' }}>סה"כ פניות</th><th style={{ textAlign:'center' }}>טופלו</th><th style={{ textAlign:'center' }}>אחוז טיפול</th><th style={{ textAlign:'center' }}>יעד יומי</th><th style={{ textAlign:'center' }}>עמידה ביעד</th></tr></thead>
             <tbody>
-              {stats.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לתקופה זו</td></tr>
-              : stats.map((s: any) => (
-                <tr key={s.name}>
-                  <td style={{ fontWeight:600 }}>{s.name}</td>
-                  <td style={{ textAlign:'center' }}><span className="badge b-blue">{s.total}</span></td>
-                  <td style={{ textAlign:'center' }}><span className="badge b-green">{s.closed}</span></td>
-                  <td style={{ textAlign:'center' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <div style={{ flex:1, height:8, background:'#e5e7eb', borderRadius:4, overflow:'hidden' }}>
-                        <div style={{ width:`${Math.round(s.closed/s.total*100)}%`, height:'100%', background:'#10b981', borderRadius:4 }} />
+              {stats.length === 0 ? <tr><td colSpan={6} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לתקופה זו</td></tr>
+              : stats.map((s: any) => {
+                const expectedTotal = s.hours * 8 // 8 per hour
+                const goalPct = expectedTotal > 0 ? Math.min(150, Math.round(s.total / expectedTotal * 100)) : null
+                return (
+                  <tr key={s.name}>
+                    <td style={{ fontWeight:600 }}>{s.name}</td>
+                    <td style={{ textAlign:'center' }}><span className="badge b-blue">{s.total}</span></td>
+                    <td style={{ textAlign:'center' }}><span className="badge b-green">{s.closed}</span></td>
+                    <td style={{ textAlign:'center' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <div style={{ flex:1, height:8, background:'#e5e7eb', borderRadius:4, overflow:'hidden' }}>
+                          <div style={{ width:`${Math.round(s.closed/s.total*100)}%`, height:'100%', background:'#10b981', borderRadius:4 }} />
+                        </div>
+                        <span style={{ fontSize:12, fontWeight:700, color:'#059669', minWidth:36 }}>{Math.round(s.closed/s.total*100)}%</span>
                       </div>
-                      <span style={{ fontSize:12, fontWeight:700, color:'#059669', minWidth:36 }}>{Math.round(s.closed/s.total*100)}%</span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={{ textAlign:'center' }}>
+                      <span className="badge b-gray">{s.hours} ש׳</span>
+                      <div style={{ fontSize:10, color:'var(--text3)', marginTop:2 }}>יעד: {expectedTotal}</div>
+                    </td>
+                    <td style={{ textAlign:'center' }}>
+                      {goalPct !== null && expectedTotal > 0 ? (
+                        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                          <div style={{ flex:1, height:8, background:'#e5e7eb', borderRadius:4, overflow:'hidden' }}>
+                            <div style={{ width:`${Math.min(100,goalPct)}%`, height:'100%', background: goalPct >= 100 ? '#10b981' : goalPct >= 70 ? '#f59e0b' : '#ef4444', borderRadius:4 }} />
+                          </div>
+                          <span style={{ fontSize:12, fontWeight:800, color: goalPct >= 100 ? '#059669' : goalPct >= 70 ? '#b45309' : '#dc2626', minWidth:40 }}>{goalPct}%</span>
+                        </div>
+                      ) : <span style={{ fontSize:11, color:'var(--text3)' }}>אין סשן</span>}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -285,6 +316,8 @@ export default function AdminPage() {
 
   const [editingUserOrgs, setEditingUserOrgs] = useState<any>(null)
   const [editUserOrgsList, setEditUserOrgsList] = useState<string[]>([])
+  const [goalUser, setGoalUser] = useState<any>(null)
+  const [goalValue, setGoalValue] = useState('')
   const [resetPassUser, setResetPassUser] = useState<any>(null)
   const [newPass, setNewPass] = useState('')
   const [toast, setToast] = useState('')
@@ -627,6 +660,7 @@ export default function AdminPage() {
                     <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs" style={{ background: 'var(--accent-lt)', color: 'var(--accent)', border: '1px solid rgba(37,99,235,0.2)' }} onClick={() => { setResetPassUser(u); setNewPass('') }}>איפוס סיסמא</button>
                       {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }} onClick={() => { setEditingUserOrgs(u); setEditUserOrgsList(u.allowed_orgs || []) }}>מחלקות</button>}
+                      {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d' }} onClick={() => setGoalUser(u)}>🎯 יעד</button>}
                       {u.id !== profile.id && u.active && <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}>השבת</button>}
                       {u.id !== profile.id && <button className="btn btn-xs" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }} onClick={() => hardDeleteUser(u.id)}>מחק</button>}
                     </td>
@@ -827,7 +861,32 @@ export default function AdminPage() {
         )}
       </div>
 
-      {/* Reset password modal */}
+      {/* Goal modal */}
+      {goalUser && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setGoalUser(null) }}>
+          <div className="modal modal-sm">
+            <div className="modal-header">
+              <div className="modal-title">🎯 יעד יומי — {goalUser.full_name}</div>
+              <button className="close-btn" onClick={() => setGoalUser(null)}>✕</button>
+            </div>
+            <div style={{ fontSize:12, color:'var(--text3)', marginBottom:14 }}>יעד נוכחי: <strong>{goalUser.daily_goal || 'לא הוגדר'}</strong> פניות ליום</div>
+            <div className="form-group">
+              <label className="form-label">יעד יומי חדש (מספר פניות)</label>
+              <input className="form-input" type="number" min="1" max="100" value={goalValue} onChange={e => setGoalValue(e.target.value)} placeholder="לדוגמה: 15" />
+            </div>
+            <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center' }} onClick={async () => {
+              const goal = parseInt(goalValue)
+              if (!goal || goal < 1) return
+              await supabase.from('profiles').update({ daily_goal: goal }).eq('id', goalUser.id)
+              await logActivity(`עדכן יעד יומי ל-${goal} פניות`, goalUser.full_name)
+              setGoalUser(null)
+              setGoalValue('')
+              loadUsers()
+              showToast('יעד עודכן ✓')
+            }}>שמור יעד</button>
+          </div>
+        </div>
+      )}
       {resetPassUser && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setResetPassUser(null) }}>
           <div className="modal modal-sm">

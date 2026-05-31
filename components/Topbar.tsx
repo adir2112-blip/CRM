@@ -154,19 +154,53 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     setOverdueReminders(prev => prev.filter(r => r.id !== id))
   }
 
+  const [todayCount, setTodayCount] = useState(0)
+  const [dailyGoal, setDailyGoal] = useState(0)
+  const GOAL_PER_HOUR = 8
+
+  useEffect(() => {
+    if (!userName || userRole !== 'agent') return
+    async function loadCounter() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+
+      // Count today's actions: new cases + manual logs
+      const [{ count: casesCount }, { count: logsCount }] = await Promise.all([
+        supabase.from('cases').select('id', { count: 'exact' }).eq('agent_id', user.id).gte('created_at', today),
+        supabase.from('case_logs').select('id', { count: 'exact' }).eq('author_id', user.id).eq('log_type', 'manual').gte('created_at', today)
+      ])
+      setTodayCount((casesCount || 0) + (logsCount || 0))
+
+      // Calculate goal from connected hours today
+      const { data: sessions } = await supabase.from('user_sessions')
+        .select('login_at, logout_at, last_ping, is_active')
+        .eq('user_id', user.id)
+        .gte('login_at', today)
+
+      let totalMinutes = 0
+      const now = new Date()
+      const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000).toISOString()
+      ;(sessions || []).forEach(s => {
+        const end = s.logout_at ? new Date(s.logout_at) :
+          (s.is_active && s.last_ping > tenMinAgo ? now : new Date(s.last_ping))
+        const mins = Math.max(0, Math.round((end.getTime() - new Date(s.login_at).getTime()) / 60000))
+        totalMinutes += mins
+      })
+
+      // Goal = complete hours worked × 8
+      const hoursWorked = Math.floor(totalMinutes / 60)
+      setDailyGoal(hoursWorked * GOAL_PER_HOUR)
+    }
+
+    loadCounter()
+    // Refresh every hour
+    const interval = setInterval(loadCounter, 60 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [userName, userRole])
+
   function relativeTime(dateStr: string): string {
-    const now = new Date()
-    const d = new Date(dateStr)
-    const nowDay = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
-    const dDay = new Date(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
-    const diffDays = Math.round((nowDay.getTime() - dDay.getTime()) / 864e5)
-    if (diffDays === 0) return 'היום'
-    if (diffDays === 1) return 'אתמול'
-    if (diffDays === 2) return 'שלשום'
-    if (diffDays < 7) return `לפני ${diffDays} ימים`
-    if (diffDays < 14) return 'שבוע שעבר'
-    return `לפני ${Math.floor(diffDays / 30) || 1} חודש`
-  }
 
   return (
     <>
@@ -229,6 +263,20 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
             </button>
           )}
 
+          {/* Daily counter for agents */}
+          {userRole === 'agent' && (
+            <div style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 12px', background:'rgba(255,255,255,0.15)', borderRadius:20, flexShrink:0 }}>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.8)' }}>ביצועים:</span>
+              <span style={{ fontSize:13, fontWeight:800, color:'#fff' }}>{todayCount}</span>
+              {dailyGoal > 0 && <>
+                <span style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>/</span>
+                <span style={{ fontSize:12, fontWeight:700, color: todayCount >= dailyGoal ? '#4ade80' : '#fbbf24' }}>{dailyGoal}</span>
+                {todayCount >= dailyGoal && <span style={{ fontSize:11 }}>🎯</span>}
+                {dailyGoal === 0 && <span style={{ fontSize:10, color:'rgba(255,255,255,0.5)' }}>({Math.floor(dailyGoal/GOAL_PER_HOUR)}ש׳)</span>}
+              </>}
+              {dailyGoal === 0 && <span style={{ fontSize:10, color:'rgba(255,255,255,0.5)' }}>טרם הוגדר יעד</span>}
+            </div>
+          )}
           <div className="user-pill">
             <div className="avatar">{initials}</div>
             <div>
@@ -266,4 +314,5 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
       )}
     </>
   )
+}
 }
