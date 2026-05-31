@@ -235,7 +235,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
         {!isAdmin && <Link href="/all-cases" className={`nav-btn${pathname === '/all-cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
         {!isAdmin && <Link href="/my-cases" className={`nav-btn${pathname === '/my-cases' ? ' active' : ''}`}>📂 הפניות שלי</Link>}
         <Link href="/calendar" className={`nav-btn${pathname === '/calendar' ? ' active' : ''}`}>📅 יומן</Link>
-        {isSuperAdmin && <Link href="/admin" className={`nav-btn${pathname.startsWith('/admin') ? ' active' : ''}`}>⚙ ניהול</Link>}
+        {isAdmin && <Link href="/admin" className={`nav-btn${pathname.startsWith('/admin') ? ' active' : ''}`}>⚙ ניהול</Link>}
 
         <div className="topbar-right">
           <div ref={searchRef} style={{ position: 'relative' }}>
