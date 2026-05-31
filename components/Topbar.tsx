@@ -201,6 +201,18 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
   }, [userName, userRole])
 
   function relativeTime(dateStr: string): string {
+    const now = new Date()
+    const d = new Date(dateStr)
+    const nowDay = new Date(now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
+    const dDay = new Date(d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
+    const diffDays = Math.round((nowDay.getTime() - dDay.getTime()) / 864e5)
+    if (diffDays === 0) return 'היום'
+    if (diffDays === 1) return 'אתמול'
+    if (diffDays === 2) return 'שלשום'
+    if (diffDays < 7) return `לפני ${diffDays} ימים`
+    if (diffDays < 14) return 'שבוע שעבר'
+    return `לפני ${Math.floor(diffDays / 30) || 1} חודש`
+  }
 
   return (
     <>
