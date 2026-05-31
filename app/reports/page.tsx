@@ -53,6 +53,38 @@ export default function ReportsPage() {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(''), 2500) }
 
+  // When org changes, reload cats and agents for that org
+  useEffect(() => {
+    if (!profile) return
+    if (fOrg) {
+      // Filter cats from existing cases or from org-specific data
+      const orgCases = cases.filter(c => c.org_name === fOrg)
+      if (orgCases.length > 0) {
+        setCat1s(Array.from(new Set(orgCases.map((c: any) => c.cat1_name).filter(Boolean))))
+        setCat2s(Array.from(new Set(orgCases.map((c: any) => c.cat2_name).filter(Boolean))))
+        setCat3s(Array.from(new Set(orgCases.map((c: any) => c.cat3_name).filter(Boolean))))
+      } else {
+        // Load from cat tables
+        supabase.from('cat1').select('name').eq('org_id', orgs.find(o => o.name === fOrg)?.id).order('name')
+          .then(({ data }) => setCat1s((data || []).map((c: any) => c.name)))
+        setCat2s([]); setCat3s([])
+      }
+      // Filter agents who handled cases in this org
+      const orgAgentIds = new Set(cases.filter(c => c.org_name === fOrg).map(c => c.agent_id))
+      if (orgAgentIds.size > 0) {
+        supabase.from('profiles').select('id, full_name').in('id', Array.from(orgAgentIds)).order('full_name')
+          .then(({ data }) => setAgents(data || []))
+      }
+    } else {
+      // Reset to all
+      setCat1s(Array.from(new Set(cases.map((c: any) => c.cat1_name).filter(Boolean))))
+      setCat2s(Array.from(new Set(cases.map((c: any) => c.cat2_name).filter(Boolean))))
+      setCat3s(Array.from(new Set(cases.map((c: any) => c.cat3_name).filter(Boolean))))
+      supabase.from('profiles').select('id, full_name').eq('active', true).order('full_name').then(({ data }) => setAgents(data || []))
+    }
+    setFCat1(''); setFCat2(''); setFCat3(''); setFAgent('')
+  }, [fOrg, cases])
+
   useEffect(() => {
     if (!profile) return
     supabase.from('statuses').select('*').order('sort_order').then(({ data }) => setStatuses(data || []))
