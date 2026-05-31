@@ -29,13 +29,13 @@ function AdminLeaderboardTab() {
 
       const agentIds = Array.from(new Set(sessions.map(s => s.user_id))) as string[]
       let profiles: any[] = []
-      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, allowed_orgs').in('id', agentIds)
+      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, allowed_orgs, role').in('id', agentIds)
       
       if (fOrg) {
         const org = orgs.find(o => o.name === fOrg)
-        profiles = (allProfiles || []).filter(p => p.allowed_orgs?.includes(org?.id))
+        profiles = (allProfiles || []).filter(p => p.role === 'agent' && p.allowed_orgs?.includes(org?.id))
       } else {
-        profiles = allProfiles || []
+        profiles = (allProfiles || []).filter(p => p.role === 'agent')
       }
 
       const results = await Promise.all(profiles.map(async agent => {

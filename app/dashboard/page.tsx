@@ -220,11 +220,11 @@ function AgentLeaderboard({ agentId, allowedOrgs }: { agentId: string, allowedOr
       if (!activeAgentIds.length) return
 
       let agentProfiles: any[] = []
-      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, allowed_orgs').in('id', activeAgentIds)
+      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, allowed_orgs, role').in('id', activeAgentIds)
       if (allowedOrgs?.length > 0) {
-        agentProfiles = (allProfiles || []).filter(p => !p.allowed_orgs?.length || p.allowed_orgs.some((o: string) => allowedOrgs.includes(o)))
+        agentProfiles = (allProfiles || []).filter(p => p.role === 'agent' && (!p.allowed_orgs?.length || p.allowed_orgs.some((o: string) => allowedOrgs.includes(o))))
       } else {
-        agentProfiles = allProfiles || []
+        agentProfiles = (allProfiles || []).filter(p => p.role === 'agent')
       }
 
       const results = await Promise.all(agentProfiles.map(async agent => {
