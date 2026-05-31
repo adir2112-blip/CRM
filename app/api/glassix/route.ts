@@ -108,11 +108,13 @@ export async function GET(request: Request) {
     if (matched.length === 0 && phone) {
       const phoneClean = phone.replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
       
+      // Direct search in ticket_data using SQL LIKE
       const { data: allMsgs } = await supabase
         .from('glassix_messages')
         .select('ticket_id, sender_name, sender_type, text, created_at, client_phone, ticket_data')
+        .or(`client_phone.eq.${phone},ticket_data.like.%${phoneClean}%`)
         .order('created_at', { ascending: false })
-        .limit(5000)
+        .limit(500)
 
       const matchedMsgs = (allMsgs || []).filter((m: any) => {
         // Check client_phone field
