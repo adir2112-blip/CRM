@@ -250,7 +250,11 @@ function AgentLeaderboard({ agentId, allowedOrgs }: { agentId: string, allowedOr
     return () => clearInterval(t)
   }, [agentId])
 
-  if (board.length === 0) return null
+  if (board.length === 0) return (
+    <div className="card card-pad" style={{ marginBottom:16, textAlign:'center', color:'var(--text3)', fontSize:13 }}>
+      🏆 לוח תחרות — אין נציגים פעילים כרגע
+    </div>
+  )
 
   return (
     <div className="card card-pad" style={{ marginBottom:16 }}>
