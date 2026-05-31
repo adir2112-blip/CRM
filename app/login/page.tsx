@@ -119,8 +119,9 @@ export default function LoginPage() {
 
         {/* Main brand text */}
         <div style={{ position:'relative', textAlign:'center', zIndex:1 }}>
-          <div style={{ width:72, height:72, background:'linear-gradient(135deg,#6366f1,#8b5cf6)', borderRadius:20, display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, margin:'0 auto 20px', boxShadow:'0 12px 40px rgba(99,102,241,0.5)' }}>📋</div>
-          <div style={{ fontSize:42, fontWeight:900, color:'#fff', letterSpacing:'-1px', marginBottom:12 }}>CRM</div>
+          <img src="/logo.png" alt="Controller CRM" style={{ width:160, height:160, objectFit:'contain', margin:'0 auto 20px', display:'block', filter:'drop-shadow(0 12px 40px rgba(99,102,241,0.5))' }} />
+          <div style={{ fontSize:32, fontWeight:900, color:'#fff', letterSpacing:'-0.5px', marginBottom:4 }}>Controller</div>
+          <div style={{ fontSize:18, fontWeight:600, color:'#6366f1', letterSpacing:'4px', marginBottom:12 }}>CRM</div>
           <div style={{ fontSize:16, color:'#94a3b8', lineHeight:1.6, maxWidth:300 }}>מערכת ניהול פניות לקוחות<br />חכמה ומתקדמת</div>
           <div style={{ display:'flex', gap:16, justifyContent:'center', marginTop:28, flexWrap:'wrap' }}>
             {['ניהול פניות', 'מעקב נציגים', 'דוחות חכמים', 'SMS אוטומטי'].map(f => (

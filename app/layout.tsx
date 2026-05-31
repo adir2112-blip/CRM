@@ -2,8 +2,12 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'CRM — מערכת ניהול פניות',
-  description: 'מערכת CRM לניהול פניות לקוחות',
+  title: 'Controller CRM',
+  description: 'מערכת ניהול פניות לקוחות',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/logo.png',
+  }
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -171,7 +171,10 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
   return (
     <>
       <div className="topbar">
-        <div className="topbar-brand"><span className="brand-dot" />CRM</div>
+        <div className="topbar-brand">
+          <img src="/logo.png" alt="Controller CRM" style={{ width:28, height:28, objectFit:'contain', borderRadius:6 }} />
+          <span style={{ fontSize:13 }}>Controller CRM</span>
+        </div>
         <Link href="/dashboard" className={`nav-btn${pathname === '/dashboard' ? ' active' : ''}`}>🏠 ראשי</Link>
         {isAdmin && <Link href="/analytics" className={`nav-btn${pathname === '/analytics' ? ' active' : ''}`}>🎯 דשבורד</Link>}
         <Link href="/new-case" style={{
