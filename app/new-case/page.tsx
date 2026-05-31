@@ -304,11 +304,8 @@ export default function NewCasePage() {
                         </select>
                       </div>
                       <div className="form-group">
-                        <label style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>שם הטבה</label>
-                        <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #bfdbfe', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', outline: 'none', appearance: 'none' as const }} value={form.benefit_id} onChange={e => { const b = benefits.find(x => x.id === e.target.value); setForm(f => ({ ...f, benefit_id: e.target.value, benefit_name: b?.name || '' })) }}>
-                          <option value="">בחר הטבה</option>
-                          {benefits.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                        </select>
+                        <label style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>שם הטבה <span style={{ color:'#9ca3af', fontWeight:400 }}>(אופציונלי)</span></label>
+                        <input style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '1.5px solid #bfdbfe', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', outline: 'none' }} value={form.benefit_name} onChange={e => setForm(f => ({ ...f, benefit_name: e.target.value, benefit_id: '' }))} placeholder="הקלד שם הטבה..." />
                       </div>
                     </div>
                   </div>
