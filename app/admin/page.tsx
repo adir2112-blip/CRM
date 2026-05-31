@@ -94,28 +94,31 @@ function AdminLeaderboardTab() {
       {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div>
       : board.length === 0 ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לתאריך זה</div>
       : (
-        <div style={{ background:'linear-gradient(135deg,#1e1b4b,#312e81)', borderRadius:16, padding:'20px 16px' }}>
-          <div style={{ fontSize:14, fontWeight:800, color:'#fff', marginBottom:14, textAlign:'center' }}>🏆 לוח תחרות — {new Date(fDate).toLocaleDateString('he-IL')}</div>
+        <div style={{ borderRadius:16, padding:'20px 16px', background:'#fafafa', border:'1px solid #e2e8f0' }}>
+          <div style={{ fontSize:14, fontWeight:800, color:'#1e293b', marginBottom:14, textAlign:'center' }}>🏆 לוח תחרות — {new Date(fDate).toLocaleDateString('he-IL')}</div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {board.map((agent, idx) => {
               const pct = board[0].score > 0 ? Math.round(agent.score / board[0].score * 100) : 0
-              const barColor = idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : idx === 2 ? '#fb923c' : '#6366f1'
+              const barColors = ['#f59e0b','#94a3b8','#fb923c','#6366f1']
+              const barColor = barColors[idx] || '#6366f1'
+              const rowBg = idx === 0 ? '#fffbeb' : idx === 1 ? '#f8fafc' : idx === 2 ? '#fff7ed' : '#fff'
+              const rowBorder = idx === 0 ? '#fcd34d' : idx === 1 ? '#e2e8f0' : idx === 2 ? '#fed7aa' : '#f1f5f9'
               const h = Math.floor(agent.mins / 60), m = agent.mins % 60
               return (
-                <div key={agent.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'rgba(255,255,255,0.08)', borderRadius:12, border:'1px solid rgba(255,255,255,0.1)' }}>
+                <div key={agent.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:rowBg, borderRadius:12, border:`2px solid ${rowBorder}` }}>
                   <div style={{ fontSize:22, flexShrink:0, minWidth:32, textAlign:'center' }}>{medals[idx] || `${idx+1}`}</div>
                   <div style={{ flex:1 }}>
                     <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
-                      <span style={{ fontWeight:700, fontSize:13, color:'#fff' }}>{agent.name}</span>
+                      <span style={{ fontWeight:700, fontSize:13, color:'#1e293b' }}>{agent.name}</span>
                       <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                        <span style={{ fontSize:14, fontWeight:900, color:'#fbbf24' }}>{agent.actions} פניות</span>
-                        <span style={{ fontSize:11, color: agent.goalPct >= 100 ? '#4ade80' : '#a5b4fc' }}>{agent.goalPct}% יעד</span>
+                        <span style={{ fontSize:14, fontWeight:900, color:'#d97706' }}>{agent.actions} פניות</span>
+                        <span style={{ fontSize:11, color: agent.goalPct >= 100 ? '#16a34a' : '#6366f1', fontWeight:600 }}>{agent.goalPct}% יעד</span>
                       </div>
                     </div>
-                    <div style={{ height:6, background:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
+                    <div style={{ height:6, background:'#f1f5f9', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
                       <div style={{ width:`${pct}%`, height:'100%', background:`linear-gradient(90deg,${barColor},${barColor}99)`, borderRadius:3, transition:'width 0.6s' }} />
                     </div>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>{h > 0 ? `${h}ש׳ ` : ''}{m}ד׳ · {agent.score.toFixed(1)} פניות/שעה · יעד: {agent.goal}</div>
+                    <div style={{ fontSize:10, color:'#94a3b8' }}>{h > 0 ? `${h}ש׳ ` : ''}{m}ד׳ · {agent.score.toFixed(1)} פניות/שעה · יעד: {agent.goal}</div>
                   </div>
                 </div>
               )
@@ -690,6 +693,13 @@ export default function AdminPage() {
   if (loading) return null
   if (profile?.role !== 'admin') return <div style={{ padding: 40 }}>אין הרשאה</div>
 
+  const isSuperAdmin = profile?.is_super_admin === true || profile?.email === 'adir2112@gmail.com'
+
+  // Tabs based on role
+  const superAdminTabs = [['users','משתמשים'],['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']]
+  const adminTabs = [['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['sms','SMS תבניות']]
+  const visibleTabs = isSuperAdmin ? superAdminTabs : adminTabs
+
   const filteredUsers = users.filter(u => {
     if (userFilter === 'active' && !u.active) return false
     if (userFilter === 'inactive' && u.active) return false
@@ -705,7 +715,7 @@ export default function AdminPage() {
       <div style={{ padding: '22px 26px' }}>
         <div className="page-header"><div className="page-title">ניהול מערכת</div></div>
         <div className="tabs">
-          {[['users','משתמשים'],['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']].map(([k,v]) => (
+          {visibleTabs.map(([k,v]) => (
             <div key={k} className={`tab${tab===k?' active':''}`} onClick={() => setTab(k)}>{v}</div>
           ))}
         </div>
@@ -781,7 +791,16 @@ export default function AdminPage() {
                       <button className="btn btn-xs" style={{ background: 'var(--accent-lt)', color: 'var(--accent)', border: '1px solid rgba(37,99,235,0.2)' }} onClick={() => { setResetPassUser(u); setNewPass('') }}>איפוס סיסמא</button>
                       {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }} onClick={() => { setEditingUserOrgs(u); setEditUserOrgsList(u.allowed_orgs || []) }}>מחלקות</button>}
                       {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d' }} onClick={() => setGoalUser(u)}>🎯 יעד</button>}
-                      {u.id !== profile.id && u.active && <button className="btn btn-xs btn-danger" onClick={() => deleteUser(u.id)}>השבת</button>}
+                      {isSuperAdmin && u.role === 'admin' && u.id !== profile.id && (
+                        <button className="btn btn-xs" style={{ background: u.is_super_admin ? '#fef3c7' : '#f8fafc', color: u.is_super_admin ? '#b45309' : '#64748b', border: `1px solid ${u.is_super_admin ? '#fcd34d' : '#e2e8f0'}` }}
+                          onClick={async () => {
+                            await supabase.from('profiles').update({ is_super_admin: !u.is_super_admin }).eq('id', u.id)
+                            await logActivity(`${u.is_super_admin ? 'הסיר' : 'הוסיף'} הרשאת סופר אדמין`, u.full_name)
+                            loadUsers()
+                          }}>
+                          {u.is_super_admin ? '⭐ סופר אדמין' : '☆ הענק סופר'}
+                        </button>
+                      )}
                       {u.id !== profile.id && <button className="btn btn-xs" style={{ background: '#fee2e2', color: '#b91c1c', border: '1px solid #fca5a5' }} onClick={() => hardDeleteUser(u.id)}>מחק</button>}
                     </td>
                   </tr>

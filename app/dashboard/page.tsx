@@ -253,32 +253,35 @@ function AgentLeaderboard({ agentId, allowedOrgs }: { agentId: string, allowedOr
   if (board.length === 0) return null
 
   return (
-    <div className="card card-pad" style={{ marginBottom:16, background:'linear-gradient(135deg,#1e1b4b,#312e81)', border:'none' }}>
+    <div className="card card-pad" style={{ marginBottom:16 }}>
       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
         <span style={{ fontSize:22 }}>🏆</span>
         <div>
-          <div style={{ fontSize:15, fontWeight:800, color:'#fff' }}>לוח תחרות יומי</div>
-          <div style={{ fontSize:11, color:'#a5b4fc' }}>מתעדכן כל 5 דקות · דירוג לפי פניות לשעה</div>
+          <div style={{ fontSize:15, fontWeight:800, color:'#1e293b' }}>לוח תחרות יומי</div>
+          <div style={{ fontSize:11, color:'#94a3b8' }}>מתעדכן כל 5 דקות · דירוג לפי פניות לשעה</div>
         </div>
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
         {board.map((agent, idx) => {
           const isMe = agent.isMe
           const pct = board[0].score > 0 ? Math.round(agent.score / board[0].score * 100) : 0
-          const barColor = idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : idx === 2 ? '#fb923c' : '#6366f1'
+          const barColors = ['#f59e0b','#94a3b8','#fb923c','#6366f1']
+          const barColor = barColors[idx] || '#6366f1'
+          const rowBg = idx === 0 ? '#fffbeb' : idx === 1 ? '#f8fafc' : idx === 2 ? '#fff7ed' : '#fafafa'
+          const rowBorder = idx === 0 ? '#fcd34d' : idx === 1 ? '#e2e8f0' : idx === 2 ? '#fed7aa' : '#f1f5f9'
           const h = Math.floor(agent.mins / 60), m = agent.mins % 60
           return (
-            <div key={agent.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background: isMe ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)', borderRadius:12, border: isMe ? '2px solid #818cf8' : '1px solid rgba(255,255,255,0.1)' }}>
+            <div key={agent.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background: isMe ? '#eff4ff' : rowBg, borderRadius:10, border: `2px solid ${isMe ? '#93c5fd' : rowBorder}` }}>
               <div style={{ fontSize:20, flexShrink:0, minWidth:28, textAlign:'center' }}>{medals[idx] || `${idx+1}`}</div>
               <div style={{ flex:1 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
-                  <span style={{ fontWeight:700, fontSize:13, color: isMe ? '#a5b4fc' : '#fff' }}>{agent.name}{isMe ? ' (אני)' : ''}</span>
-                  <span style={{ fontSize:14, fontWeight:900, color:'#fbbf24' }}>{agent.actions}</span>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                  <span style={{ fontWeight:700, fontSize:13, color: isMe ? '#2563eb' : '#1e293b' }}>{agent.name}{isMe ? ' (אני)' : ''}</span>
+                  <span style={{ fontSize:14, fontWeight:900, color:'#d97706' }}>{agent.actions} פניות</span>
                 </div>
-                <div style={{ height:6, background:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
+                <div style={{ height:6, background:'#f1f5f9', borderRadius:3, overflow:'hidden', marginBottom:3 }}>
                   <div style={{ width:`${pct}%`, height:'100%', background:`linear-gradient(90deg,${barColor},${barColor}99)`, borderRadius:3, transition:'width 0.6s' }} />
                 </div>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>{h > 0 ? `${h}ש׳ ` : ''}{m}ד׳ · {agent.score.toFixed(1)} פניות/שעה</div>
+                <div style={{ fontSize:10, color:'#94a3b8' }}>{h > 0 ? `${h}ש׳ ` : ''}{m}ד׳ · {agent.score.toFixed(1)} פניות/שעה</div>
               </div>
             </div>
           )
