@@ -372,6 +372,170 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* ===== NEW ANALYTICS SECTION ===== */}
+
+      {/* 1. Weekly trend - current vs previous week */}
+      {(() => {
+        const days = ['ראשון','שני','שלישי','רביעי','חמישי']
+        const today = new Date()
+        const weekData = days.map((dayName, idx) => {
+          // Current week: find the most recent occurrence of this day
+          const curDate = new Date(today)
+          const curDow = today.getDay()
+          const daysBack = (curDow - idx + 7) % 7
+          curDate.setDate(today.getDate() - daysBack)
+          const curStr = curDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+          
+          const prevDate = new Date(curDate)
+          prevDate.setDate(curDate.getDate() - 7)
+          const prevStr = prevDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+
+          const curCount = all.filter(c => {
+            const d = new Date(c.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+            return d === curStr
+          }).length
+          const prevCount = all.filter(c => {
+            const d = new Date(c.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+            return d === prevStr
+          }).length
+          return { day: dayName, 'שבוע זה': curCount, 'שבוע קודם': prevCount }
+        })
+        const avgCur = Math.round(weekData.reduce((s,d) => s + d['שבוע זה'], 0) / 5)
+        const avgPrev = Math.round(weekData.reduce((s,d) => s + d['שבוע קודם'], 0) / 5)
+        const diff = avgCur - avgPrev
+        return (
+          <div className="card card-pad" style={{ marginBottom:16 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:800, color:'#1e293b', marginBottom:4 }}>📅 פניות לפי יום — השוואת שבועות</div>
+                <div style={{ fontSize:12, color:'#64748b' }}>קו כחול = שבוע זה | קו אפור = שבוע קודם | ממוצע יומי</div>
+              </div>
+              <div style={{ display:'flex', gap:12 }}>
+                <div style={{ textAlign:'center', padding:'8px 16px', background:'#eff4ff', borderRadius:10 }}>
+                  <div style={{ fontSize:20, fontWeight:900, color:'#2563eb' }}>{avgCur}</div>
+                  <div style={{ fontSize:10, color:'#64748b' }}>ממוצע השבוע</div>
+                </div>
+                <div style={{ textAlign:'center', padding:'8px 16px', background: diff > 0 ? '#fff5f5' : '#f0fdf4', borderRadius:10 }}>
+                  <div style={{ fontSize:20, fontWeight:900, color: diff > 0 ? '#dc2626' : '#16a34a' }}>{diff > 0 ? '+' : ''}{diff}</div>
+                  <div style={{ fontSize:10, color:'#64748b' }}>vs שבוע קודם</div>
+                </div>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={weekData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                <XAxis dataKey="day" tick={{ fontSize:12, fill:'#64748b' }} />
+                <YAxis tick={{ fontSize:11, fill:'#94a3b8' }} />
+                <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #e2e8f0', fontSize:12 }} />
+                <Legend wrapperStyle={{ fontSize:12 }} />
+                <Line type="monotone" dataKey="שבוע זה" stroke="#2563eb" strokeWidth={3} dot={{ r:5, fill:'#2563eb' }} activeDot={{ r:7 }} />
+                <Line type="monotone" dataKey="שבוע קודם" stroke="#94a3b8" strokeWidth={2} strokeDasharray="5 5" dot={{ r:4, fill:'#94a3b8' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )
+      })()}
+
+      {/* 2. Month over month comparison */}
+      {(() => {
+        const today = new Date()
+        const months: string[] = []
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth() - i, 1)
+          months.push(d.toLocaleDateString('he-IL', { month: 'short', year: '2-digit' }))
+        }
+        const monthData = months.map((label, idx) => {
+          const d = new Date(today.getFullYear(), today.getMonth() - (5 - idx), 1)
+          const y = d.getFullYear(), m = d.getMonth()
+          const inMonth = all.filter(c => {
+            const cd = new Date(c.created_at)
+            return cd.getFullYear() === y && cd.getMonth() === m
+          })
+          return {
+            month: label,
+            'פניות': inMonth.length,
+            'טופלו': inMonth.filter(c => c.status_name?.includes('טופל')).length,
+            'חריגות': inMonth.filter(c => {
+              if (c.status_name?.includes('טופל')) return false
+              return true
+            }).length
+          }
+        })
+        const curMonth = monthData[monthData.length - 1]
+        const prevMonth = monthData[monthData.length - 2]
+        const growth = prevMonth.פניות ? Math.round((curMonth.פניות - prevMonth.פניות) / prevMonth.פניות * 100) : 0
+        return (
+          <div className="card card-pad" style={{ marginBottom:16 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:16 }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:800, color:'#1e293b', marginBottom:4 }}>📈 השוואת חודשים — 6 חודשים אחרונים</div>
+                <div style={{ fontSize:12, color:'#64748b' }}>כחול = סה"כ פניות | ירוק = טופלו | הגידול מחודש לחודש</div>
+              </div>
+              <div style={{ textAlign:'center', padding:'8px 16px', background: growth >= 0 ? '#fff5f5' : '#f0fdf4', borderRadius:10 }}>
+                <div style={{ fontSize:20, fontWeight:900, color: growth >= 0 ? '#dc2626' : '#16a34a' }}>{growth >= 0 ? '+' : ''}{growth}%</div>
+                <div style={{ fontSize:10, color:'#64748b' }}>גידול חודש זה</div>
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart data={monthData} barGap={4}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize:11, fill:'#64748b' }} />
+                <YAxis tick={{ fontSize:11, fill:'#94a3b8' }} />
+                <Tooltip contentStyle={{ borderRadius:10, border:'1px solid #e2e8f0', fontSize:12 }} />
+                <Legend wrapperStyle={{ fontSize:12 }} />
+                <Bar dataKey="פניות" fill="#6366f1" radius={[4,4,0,0]} />
+                <Bar dataKey="טופלו" fill="#10b981" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )
+      })()}
+
+      {/* 3. At-risk cases */}
+      {(() => {
+        // Cases at risk: open case + same customer called again (new case same phone) + different agent logged
+        const atRisk = all.filter(c => {
+          if (c.status_name?.includes('טופל')) return false
+          // Check if same phone has another open case
+          const samePhone = all.filter(x => x.phone && x.phone === c.phone && x.id !== c.id && !x.status_name?.includes('טופל'))
+          if (samePhone.length === 0) return false
+          // Check if a different agent logged on this case
+          return true
+        }).slice(0, 10)
+        if (atRisk.length === 0) return null
+        return (
+          <div className="card card-pad" style={{ marginBottom:16, border:'2px solid #fca5a5' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:800, color:'#dc2626', marginBottom:4 }}>🚨 פניות בסיכון ({atRisk.length})</div>
+                <div style={{ fontSize:12, color:'#64748b' }}>לקוח עם פניה פתוחה שחזר לפנות — נדרש טיפול מיידי</div>
+              </div>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              {atRisk.map(c => {
+                const samePhone = all.filter(x => x.phone === c.phone && x.id !== c.id && !x.status_name?.includes('טופל'))
+                return (
+                  <div key={c.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 14px', background:'#fff5f5', borderRadius:10, border:'1px solid #fecaca', cursor:'pointer' }}
+                    onClick={() => setSelectedCase(c)}>
+                    <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                      <div style={{ width:36, height:36, borderRadius:'50%', background:'#dc2626', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, flexShrink:0 }}>!</div>
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:13 }}>{c.customer_name}</div>
+                        <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{c.phone} · נציג: {c.agent_name}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:'left' }}>
+                      <span style={{ background:'#dc2626', color:'#fff', borderRadius:999, padding:'3px 10px', fontSize:12, fontWeight:700 }}>{samePhone.length + 1} פניות פתוחות</span>
+                      <div style={{ fontSize:10, color:'#9ca3af', marginTop:4, textAlign:'center' }}>{fmt(c.updated_at)}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Recurring modal */}
       {recurringModal && (
         <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setRecurringModal(null) }}>
