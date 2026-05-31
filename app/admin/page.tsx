@@ -7,6 +7,126 @@ import * as XLSX from 'xlsx'
 
 const SUPER_ADMIN = 'adir2112@gmail.com'
 
+function AdminLeaderboardTab() {
+  const supabase = createClient()
+  const [board, setBoard] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [orgs, setOrgs] = useState<any[]>([])
+  const [fOrg, setFOrg] = useState('')
+  const [fDate, setFDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' }))
+  const medals = ['🥇', '🥈', '🥉']
+
+  useEffect(() => {
+    supabase.from('organizations').select('id,name').order('name').then(({ data }) => setOrgs(data || []))
+  }, [])
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+      const { data: sessions } = await supabase.from('user_sessions').select('user_id, user_name, login_at, logout_at, last_ping, is_active').gte('login_at', fDate)
+      if (!sessions?.length) { setBoard([]); setLoading(false); return }
+
+      const agentIds = Array.from(new Set(sessions.map(s => s.user_id))) as string[]
+      let profiles: any[] = []
+      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, allowed_orgs').in('id', agentIds)
+      
+      if (fOrg) {
+        const org = orgs.find(o => o.name === fOrg)
+        profiles = (allProfiles || []).filter(p => p.allowed_orgs?.includes(org?.id))
+      } else {
+        profiles = allProfiles || []
+      }
+
+      const results = await Promise.all(profiles.map(async agent => {
+        const [{ count: c1 }, { count: c2 }] = await Promise.all([
+          supabase.from('cases').select('id', { count: 'exact' }).eq('agent_id', agent.id).gte('created_at', fDate),
+          supabase.from('case_logs').select('id', { count: 'exact' }).eq('author_id', agent.id).eq('log_type', 'manual').gte('created_at', fDate)
+        ])
+        const actions = (c1 || 0) + (c2 || 0)
+        const agentSessions = sessions.filter(s => s.user_id === agent.id)
+        let totalMins = 0
+        const now = new Date()
+        agentSessions.forEach((s: any) => {
+          const end = s.logout_at ? new Date(s.logout_at) : (s.is_active && s.last_ping > tenMinAgo ? now : new Date(s.last_ping))
+          totalMins += Math.max(0, Math.round((end.getTime() - new Date(s.login_at).getTime()) / 60000))
+        })
+        const score = actions / Math.max(0.5, totalMins / 60)
+        const hoursWorked = Math.floor(totalMins / 60)
+        const goal = hoursWorked * 8
+        const goalPct = goal > 0 ? Math.min(150, Math.round(actions / goal * 100)) : 0
+        return { id: agent.id, name: agent.full_name, actions, mins: totalMins, score, goal, goalPct }
+      }))
+      setBoard(results.filter(r => r.actions > 0 || r.mins > 0).sort((a, b) => b.score - a.score))
+      setLoading(false)
+    }
+    load()
+  }, [fOrg, fDate, orgs])
+
+  function exportExcel() {
+    const rows = board.map((a, i) => ({
+      'מקום': i + 1,
+      'נציג': a.name,
+      'פניות': a.actions,
+      'שעות עבודה': Math.floor(a.mins / 60),
+      'פניות לשעה': a.score.toFixed(1),
+      'יעד': a.goal,
+      'עמידה ביעד %': a.goalPct,
+    }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'תחרות')
+    XLSX.writeFile(wb, `תחרות_${fDate}.xlsx`)
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap', alignItems:'center' }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>🏆 לוח תחרות</div>
+        <input type="date" className="form-input" value={fDate} onChange={e => setFDate(e.target.value)} style={{ width:160 }} />
+        <select className="form-input" value={fOrg} onChange={e => setFOrg(e.target.value)} style={{ width:180, fontSize:12 }}>
+          <option value="">כל הארגונים</option>
+          {orgs.map(o => <option key={o.id} value={o.name}>{o.name}</option>)}
+        </select>
+        <button className="btn btn-success btn-sm" style={{ marginRight:'auto' }} onClick={exportExcel}>📥 Excel</button>
+      </div>
+
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</div>
+      : board.length === 0 ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים לתאריך זה</div>
+      : (
+        <div style={{ background:'linear-gradient(135deg,#1e1b4b,#312e81)', borderRadius:16, padding:'20px 16px' }}>
+          <div style={{ fontSize:14, fontWeight:800, color:'#fff', marginBottom:14, textAlign:'center' }}>🏆 לוח תחרות — {new Date(fDate).toLocaleDateString('he-IL')}</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {board.map((agent, idx) => {
+              const pct = board[0].score > 0 ? Math.round(agent.score / board[0].score * 100) : 0
+              const barColor = idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : idx === 2 ? '#fb923c' : '#6366f1'
+              const h = Math.floor(agent.mins / 60), m = agent.mins % 60
+              return (
+                <div key={agent.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', background:'rgba(255,255,255,0.08)', borderRadius:12, border:'1px solid rgba(255,255,255,0.1)' }}>
+                  <div style={{ fontSize:22, flexShrink:0, minWidth:32, textAlign:'center' }}>{medals[idx] || `${idx+1}`}</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                      <span style={{ fontWeight:700, fontSize:13, color:'#fff' }}>{agent.name}</span>
+                      <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                        <span style={{ fontSize:14, fontWeight:900, color:'#fbbf24' }}>{agent.actions} פניות</span>
+                        <span style={{ fontSize:11, color: agent.goalPct >= 100 ? '#4ade80' : '#a5b4fc' }}>{agent.goalPct}% יעד</span>
+                      </div>
+                    </div>
+                    <div style={{ height:6, background:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
+                      <div style={{ width:`${pct}%`, height:'100%', background:`linear-gradient(90deg,${barColor},${barColor}99)`, borderRadius:3, transition:'width 0.6s' }} />
+                    </div>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>{h > 0 ? `${h}ש׳ ` : ''}{m}ד׳ · {agent.score.toFixed(1)} פניות/שעה · יעד: {agent.goal}</div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function OnlineUsersTab() {
   const supabase = createClient()
   const [sessions, setSessions] = useState<any[]>([])
@@ -585,7 +705,7 @@ export default function AdminPage() {
       <div style={{ padding: '22px 26px' }}>
         <div className="page-header"><div className="page-title">ניהול מערכת</div></div>
         <div className="tabs">
-          {[['users','משתמשים'],['online','🟢 מחוברים'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']].map(([k,v]) => (
+          {[['users','משתמשים'],['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']].map(([k,v]) => (
             <div key={k} className={`tab${tab===k?' active':''}`} onClick={() => setTab(k)}>{v}</div>
           ))}
         </div>
@@ -851,6 +971,7 @@ export default function AdminPage() {
         )}
 
         {tab === 'online' && <OnlineUsersTab />}
+        {tab === 'leaderboard' && <AdminLeaderboardTab />}
 
         {tab === 'agent-stats' && (
           <AgentStatsTab />

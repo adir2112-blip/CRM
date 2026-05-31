@@ -156,8 +156,8 @@ function GlassixTicket({ ticket: t }: { ticket: any }) {
   )
 }
 
-// Vertical progress meter - fixed on left side
-function VerticalMeter({ agentId }: { agentId: string }) {
+// Horizontal progress meter - under topbar
+function HorizontalMeter({ agentId }: { agentId: string }) {
   const supabase = createClient()
   const [count, setCount] = useState(0)
   const [goal, setGoal] = useState(0)
@@ -189,16 +189,16 @@ function VerticalMeter({ agentId }: { agentId: string }) {
   const color = pct >= 100 ? '#10b981' : pct >= 70 ? '#f59e0b' : pct >= 40 ? '#6366f1' : '#3b82f6'
 
   return (
-    <div style={{ position:'fixed', left:0, top:'50%', transform:'translateY(-50%)', zIndex:50, display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'12px 6px', background:'rgba(255,255,255,0.97)', borderRadius:'0 12px 12px 0', boxShadow:'4px 0 16px rgba(0,0,0,0.12)', border:'1px solid #e2e8f0', borderLeft:'none' }}>
-      <div style={{ fontSize:9, fontWeight:700, color:'#64748b', writingMode:'vertical-rl', transform:'rotate(180deg)', marginBottom:4 }}>ביצועים</div>
-      <div style={{ width:18, height:160, background:'#f1f5f9', borderRadius:9, overflow:'hidden', display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
-        <div style={{ width:'100%', height:`${pct}%`, background:`linear-gradient(to top, ${color}, ${color}aa)`, borderRadius:9, transition:'height 0.6s ease' }} />
+    <div style={{ background:'#fff', borderBottom:'1px solid #e2e8f0', padding:'6px 24px', display:'flex', alignItems:'center', gap:14 }}>
+      <span style={{ fontSize:11, fontWeight:700, color:'#64748b', whiteSpace:'nowrap' }}>ביצועים יומיים</span>
+      <div style={{ flex:1, height:10, background:'#f1f5f9', borderRadius:5, overflow:'hidden', position:'relative' }}>
+        <div style={{ height:'100%', width:`${pct}%`, background:`linear-gradient(90deg, ${color}, ${color}bb)`, borderRadius:5, transition:'width 0.6s ease' }} />
       </div>
-      <div style={{ textAlign:'center' }}>
-        <div style={{ fontSize:13, fontWeight:900, color: pct >= 100 ? '#10b981' : '#1e293b' }}>{count}</div>
-        {goal > 0 && <div style={{ fontSize:9, color:'#94a3b8' }}>/{goal}</div>}
-        {pct >= 100 && <div style={{ fontSize:12 }}>🎯</div>}
-        {pct > 0 && goal > 0 && <div style={{ fontSize:9, fontWeight:700, color }}>{pct}%</div>}
+      <div style={{ display:'flex', alignItems:'center', gap:6, whiteSpace:'nowrap' }}>
+        <span style={{ fontSize:13, fontWeight:800, color }}>{count}</span>
+        {goal > 0 && <span style={{ fontSize:11, color:'#94a3b8' }}>/ {goal}</span>}
+        {goal > 0 && <span style={{ fontSize:11, fontWeight:700, color, background: pct >= 100 ? '#dcfce7' : '#f1f5f9', padding:'1px 8px', borderRadius:999 }}>{pct}%</span>}
+        {pct >= 100 && <span>🎯</span>}
       </div>
     </div>
   )
@@ -250,7 +250,7 @@ function AgentLeaderboard({ agentId, allowedOrgs }: { agentId: string, allowedOr
     return () => clearInterval(t)
   }, [agentId])
 
-  if (board.length <= 1) return null
+  if (board.length === 0) return null
 
   return (
     <div className="card card-pad" style={{ marginBottom:16, background:'linear-gradient(135deg,#1e1b4b,#312e81)', border:'none' }}>
@@ -635,7 +635,7 @@ function DashboardPage() {
   return (
     <>
       <Topbar userName={profile?.full_name||''} userRole={profile?.role||'agent'} userEmail={profile?.email||''} onOpenCase={openCase} />
-      {!isAdmin && <VerticalMeter agentId={profile.id} />}
+      {!isAdmin && <HorizontalMeter agentId={profile.id} />}
       <div style={{ padding:'22px 26px', maxWidth:1600, margin:'0 auto' }}>
 
         <div className="page-header">
