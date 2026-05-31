@@ -568,15 +568,14 @@ export default function AdminPage() {
   }
 
   async function logActivity(action: string, targetUser?: string) {
-    try {
-      await supabase.from('admin_activity_log').insert({
-        performed_by: profile.id,
-        performed_by_name: profile.full_name,
-        action,
-        target_user: targetUser || '',
-        created_at: new Date().toISOString()
-      })
-    } catch {}
+    const { error } = await supabase.from('admin_activity_log').insert({
+      performed_by: profile.id,
+      performed_by_name: profile.full_name,
+      action,
+      target_user: targetUser || '',
+      created_at: new Date().toISOString()
+    })
+    if (error) console.error('logActivity error:', error)
   }
 
   async function resetPassword() {
