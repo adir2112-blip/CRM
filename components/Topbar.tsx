@@ -327,4 +327,3 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     </>
   )
 }
-}
