@@ -156,6 +156,138 @@ function GlassixTicket({ ticket: t }: { ticket: any }) {
   )
 }
 
+// Vertical progress meter - fixed on left side
+function VerticalMeter({ agentId }: { agentId: string }) {
+  const supabase = createClient()
+  const [count, setCount] = useState(0)
+  const [goal, setGoal] = useState(0)
+
+  useEffect(() => {
+    async function load() {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+      const [{ count: c1 }, { count: c2 }] = await Promise.all([
+        supabase.from('cases').select('id', { count: 'exact' }).eq('agent_id', agentId).gte('created_at', today),
+        supabase.from('case_logs').select('id', { count: 'exact' }).eq('author_id', agentId).eq('log_type', 'manual').gte('created_at', today)
+      ])
+      setCount((c1 || 0) + (c2 || 0))
+      const { data: sessions } = await supabase.from('user_sessions').select('login_at, logout_at, last_ping, is_active').eq('user_id', agentId).gte('login_at', today)
+      let totalMins = 0
+      const now = new Date()
+      ;(sessions || []).forEach((s: any) => {
+        const end = s.logout_at ? new Date(s.logout_at) : (s.is_active && s.last_ping > tenMinAgo ? now : new Date(s.last_ping))
+        totalMins += Math.max(0, Math.round((end.getTime() - new Date(s.login_at).getTime()) / 60000))
+      })
+      setGoal(Math.floor(totalMins / 60) * 8)
+    }
+    load()
+    const t = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [agentId])
+
+  const pct = goal > 0 ? Math.min(100, Math.round(count / goal * 100)) : 0
+  const color = pct >= 100 ? '#10b981' : pct >= 70 ? '#f59e0b' : pct >= 40 ? '#6366f1' : '#3b82f6'
+
+  return (
+    <div style={{ position:'fixed', left:0, top:'50%', transform:'translateY(-50%)', zIndex:50, display:'flex', flexDirection:'column', alignItems:'center', gap:6, padding:'12px 6px', background:'rgba(255,255,255,0.97)', borderRadius:'0 12px 12px 0', boxShadow:'4px 0 16px rgba(0,0,0,0.12)', border:'1px solid #e2e8f0', borderLeft:'none' }}>
+      <div style={{ fontSize:9, fontWeight:700, color:'#64748b', writingMode:'vertical-rl', transform:'rotate(180deg)', marginBottom:4 }}>ביצועים</div>
+      <div style={{ width:18, height:160, background:'#f1f5f9', borderRadius:9, overflow:'hidden', display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
+        <div style={{ width:'100%', height:`${pct}%`, background:`linear-gradient(to top, ${color}, ${color}aa)`, borderRadius:9, transition:'height 0.6s ease' }} />
+      </div>
+      <div style={{ textAlign:'center' }}>
+        <div style={{ fontSize:13, fontWeight:900, color: pct >= 100 ? '#10b981' : '#1e293b' }}>{count}</div>
+        {goal > 0 && <div style={{ fontSize:9, color:'#94a3b8' }}>/{goal}</div>}
+        {pct >= 100 && <div style={{ fontSize:12 }}>🎯</div>}
+        {pct > 0 && goal > 0 && <div style={{ fontSize:9, fontWeight:700, color }}>{pct}%</div>}
+      </div>
+    </div>
+  )
+}
+
+// Daily leaderboard component
+function AgentLeaderboard({ agentId, allowedOrgs }: { agentId: string, allowedOrgs: string[] }) {
+  const supabase = createClient()
+  const [board, setBoard] = useState<any[]>([])
+  const medals = ['🥇', '🥈', '🥉']
+
+  useEffect(() => {
+    async function load() {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
+      const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+      const { data: sessions } = await supabase.from('user_sessions').select('user_id, user_name, login_at, logout_at, last_ping, is_active').gte('login_at', today)
+      if (!sessions?.length) return
+      const activeAgentIds = Array.from(new Set(sessions.filter(s => s.is_active && s.last_ping > tenMinAgo).map(s => s.user_id))) as string[]
+      if (!activeAgentIds.length) return
+
+      let agentProfiles: any[] = []
+      const { data: allProfiles } = await supabase.from('profiles').select('id, full_name, allowed_orgs').in('id', activeAgentIds)
+      if (allowedOrgs?.length > 0) {
+        agentProfiles = (allProfiles || []).filter(p => !p.allowed_orgs?.length || p.allowed_orgs.some((o: string) => allowedOrgs.includes(o)))
+      } else {
+        agentProfiles = allProfiles || []
+      }
+
+      const results = await Promise.all(agentProfiles.map(async agent => {
+        const [{ count: c1 }, { count: c2 }] = await Promise.all([
+          supabase.from('cases').select('id', { count: 'exact' }).eq('agent_id', agent.id).gte('created_at', today),
+          supabase.from('case_logs').select('id', { count: 'exact' }).eq('author_id', agent.id).eq('log_type', 'manual').gte('created_at', today)
+        ])
+        const actions = (c1 || 0) + (c2 || 0)
+        const agentSessions = sessions.filter(s => s.user_id === agent.id)
+        let totalMins = 0
+        const now = new Date()
+        agentSessions.forEach((s: any) => {
+          const end = s.logout_at ? new Date(s.logout_at) : (s.is_active && s.last_ping > tenMinAgo ? now : new Date(s.last_ping))
+          totalMins += Math.max(0, Math.round((end.getTime() - new Date(s.login_at).getTime()) / 60000))
+        })
+        const score = actions / Math.max(0.5, totalMins / 60)
+        return { id: agent.id, name: agent.full_name, actions, mins: totalMins, score, isMe: agent.id === agentId }
+      }))
+      setBoard(results.sort((a, b) => b.score - a.score))
+    }
+    load()
+    const t = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [agentId])
+
+  if (board.length <= 1) return null
+
+  return (
+    <div className="card card-pad" style={{ marginBottom:16, background:'linear-gradient(135deg,#1e1b4b,#312e81)', border:'none' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
+        <span style={{ fontSize:22 }}>🏆</span>
+        <div>
+          <div style={{ fontSize:15, fontWeight:800, color:'#fff' }}>לוח תחרות יומי</div>
+          <div style={{ fontSize:11, color:'#a5b4fc' }}>מתעדכן כל 5 דקות · דירוג לפי פניות לשעה</div>
+        </div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+        {board.map((agent, idx) => {
+          const isMe = agent.isMe
+          const pct = board[0].score > 0 ? Math.round(agent.score / board[0].score * 100) : 0
+          const barColor = idx === 0 ? '#fbbf24' : idx === 1 ? '#94a3b8' : idx === 2 ? '#fb923c' : '#6366f1'
+          const h = Math.floor(agent.mins / 60), m = agent.mins % 60
+          return (
+            <div key={agent.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 14px', background: isMe ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)', borderRadius:12, border: isMe ? '2px solid #818cf8' : '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ fontSize:20, flexShrink:0, minWidth:28, textAlign:'center' }}>{medals[idx] || `${idx+1}`}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:5 }}>
+                  <span style={{ fontWeight:700, fontSize:13, color: isMe ? '#a5b4fc' : '#fff' }}>{agent.name}{isMe ? ' (אני)' : ''}</span>
+                  <span style={{ fontSize:14, fontWeight:900, color:'#fbbf24' }}>{agent.actions}</span>
+                </div>
+                <div style={{ height:6, background:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden', marginBottom:4 }}>
+                  <div style={{ width:`${pct}%`, height:'100%', background:`linear-gradient(90deg,${barColor},${barColor}99)`, borderRadius:3, transition:'width 0.6s' }} />
+                </div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>{h > 0 ? `${h}ש׳ ` : ''}{m}ד׳ · {agent.score.toFixed(1)} פניות/שעה</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function DashboardPage() {
   const { profile, loading } = useUser()
   const searchParams = useSearchParams()
@@ -503,6 +635,7 @@ function DashboardPage() {
   return (
     <>
       <Topbar userName={profile?.full_name||''} userRole={profile?.role||'agent'} userEmail={profile?.email||''} onOpenCase={openCase} />
+      {!isAdmin && <VerticalMeter agentId={profile.id} />}
       <div style={{ padding:'22px 26px', maxWidth:1600, margin:'0 auto' }}>
 
         <div className="page-header">
@@ -637,43 +770,48 @@ function DashboardPage() {
         </div>
         {/* Agent SLA section */}
         {!isAdmin && (
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
-            {/* SLA counter card */}
-            <div className="card card-pad" style={{ textAlign:'center' }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#dc2626', marginBottom:8 }}>🔴 חריגת SLA</div>
-              <div style={{ fontSize:48, fontWeight:900, color: overdueCases.length > 0 ? '#dc2626' : '#10b981', lineHeight:1 }}>{overdueCases.length}</div>
-              <div style={{ fontSize:12, color:'var(--text3)', marginTop:6 }}>פניות שחרגו מ-2 ימי עסקים</div>
-              {overdueCases.length > 0 && (
-                <button className="btn btn-xs" style={{ marginTop:10, background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5' }} onClick={() => showList('חריגת SLA', overdueCases)}>הצג הכל</button>
-              )}
-            </div>
-            {/* SLA list card */}
-            <div className="card">
-              <div className="card-header">
-                <div className="card-title" style={{ color:'#dc2626' }}>📋 רשימת חריגות</div>
-                <span className="badge b-red">{overdueCases.length}</span>
+          <>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
+              {/* SLA counter card */}
+              <div className="card card-pad" style={{ textAlign:'center' }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#dc2626', marginBottom:8 }}>🔴 חריגת SLA</div>
+                <div style={{ fontSize:48, fontWeight:900, color: overdueCases.length > 0 ? '#dc2626' : '#10b981', lineHeight:1 }}>{overdueCases.length}</div>
+                <div style={{ fontSize:12, color:'var(--text3)', marginTop:6 }}>פניות שחרגו מ-2 ימי עסקים</div>
+                {overdueCases.length > 0 && (
+                  <button className="btn btn-xs" style={{ marginTop:10, background:'#fef2f2', color:'#dc2626', border:'1px solid #fca5a5' }} onClick={() => showList('חריגת SLA', overdueCases)}>הצג הכל</button>
+                )}
               </div>
-              <div style={{ padding:'10px 14px', maxHeight:220, overflowY:'auto' }}>
-                {overdueCases.length === 0
-                  ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>✅ אין חריגות כרגע</div>
-                  : overdueCases.map((c: any) => (
-                    <div key={c.id} onClick={() => openCase(c)} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', cursor:'pointer', borderBottom:'1px solid var(--border)' }}
-                      onMouseEnter={e => (e.currentTarget.style.background='#fef2f2')}
-                      onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
-                      <div style={{ flex:1 }}>
-                        <div style={{ fontWeight:600, fontSize:13 }}>{c.customer_name}</div>
-                        <div style={{ fontSize:11, color:'var(--text3)' }}>{c.cat1_name}{c.cat2_name?' › '+c.cat2_name:''}</div>
+              {/* SLA list card */}
+              <div className="card">
+                <div className="card-header">
+                  <div className="card-title" style={{ color:'#dc2626' }}>📋 רשימת חריגות</div>
+                  <span className="badge b-red">{overdueCases.length}</span>
+                </div>
+                <div style={{ padding:'10px 14px', maxHeight:220, overflowY:'auto' }}>
+                  {overdueCases.length === 0
+                    ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text3)', fontSize:13 }}>✅ אין חריגות כרגע</div>
+                    : overdueCases.map((c: any) => (
+                      <div key={c.id} onClick={() => openCase(c)} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', cursor:'pointer', borderBottom:'1px solid var(--border)' }}
+                        onMouseEnter={e => (e.currentTarget.style.background='#fef2f2')}
+                        onMouseLeave={e => (e.currentTarget.style.background='transparent')}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ fontWeight:600, fontSize:13 }}>{c.customer_name}</div>
+                          <div style={{ fontSize:11, color:'var(--text3)' }}>{c.cat1_name}{c.cat2_name?' › '+c.cat2_name:''}</div>
+                        </div>
+                        <div style={{ textAlign:'left' }}>
+                          <div style={{ fontSize:11, fontWeight:700, color:'#dc2626' }}>{businessDaysBetween(new Date(c.updated_at), new Date())} ימים</div>
+                          <div style={{ fontSize:10, color:'var(--text3)' }}>{relativeTime(c.updated_at)}</div>
+                        </div>
                       </div>
-                      <div style={{ textAlign:'left' }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:'#dc2626' }}>{businessDaysBetween(new Date(c.updated_at), new Date())} ימים</div>
-                        <div style={{ fontSize:10, color:'var(--text3)' }}>{relativeTime(c.updated_at)}</div>
-                      </div>
-                    </div>
-                  ))
-                }
+                    ))
+                  }
+                </div>
               </div>
             </div>
-          </div>
+
+            {/* Daily Leaderboard */}
+            <AgentLeaderboard agentId={profile.id} allowedOrgs={profile.allowed_orgs || []} />
+          </>
         )}
 
         {/* Admin panels */}
