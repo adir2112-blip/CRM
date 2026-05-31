@@ -120,20 +120,13 @@ export async function GET(request: Request) {
           const cp = m.client_phone.replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
           if (cp === phoneClean) return true
         }
-        // Check ticket_data JSON
+        // Check participant.identifier in ticket_data (WhatsApp phone = 972XXXXXXXXX)
         try {
           const td = JSON.parse(m.ticket_data || '{}')
-          const id = (td.clientPhone || td.participant?.identifier || '').replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
-          if (id && id === phoneClean) return true
+          const identifier = td.participant?.identifier || ''
+          const idNorm = identifier.replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
+          if (idNorm && idNorm === phoneClean) return true
         } catch {}
-        // Check if Client sender — their identifier might be phone
-        if (m.sender_type === 'Client') {
-          try {
-            const td = JSON.parse(m.ticket_data || '{}')
-            const id = (td.participant?.identifier || '').replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
-            if (id && id === phoneClean) return true
-          } catch {}
-        }
         return false
       })
 
