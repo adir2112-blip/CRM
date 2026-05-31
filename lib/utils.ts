@@ -1,12 +1,15 @@
 export function businessDaysBetween(d1: Date, d2: Date): number {
-  const start = new Date(Math.min(d1.getTime(), d2.getTime()))
-  const end = new Date(Math.max(d1.getTime(), d2.getTime()))
+  const start = new Date(d1)
+  const end = new Date(d2)
+  start.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+  if (start >= end) return 0
   let count = 0
   const cur = new Date(start)
   cur.setDate(cur.getDate() + 1)
   while (cur <= end) {
     const dow = cur.getDay()
-    if (dow !== 5 && dow !== 6) count++
+    if (dow !== 5 && dow !== 6) count++ // skip Friday(5) and Saturday(6)
     cur.setDate(cur.getDate() + 1)
   }
   return count
@@ -15,18 +18,17 @@ export function businessDaysBetween(d1: Date, d2: Date): number {
 export function isOverdue(c: any): boolean {
   if (!c) return false
   if (c.status_name === 'טופל' || c.status_name === 'טופל לאחר שיחת מנהל') return false
-  // Check business days from last update until today
-  return businessDaysBetween(new Date(c.updated_at), new Date()) > 2
+  return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 
 export function isMgrWaitOverdue(c: any): boolean {
   if (c.status_name !== 'הועבר לשיחת מנהל' && c.status_name !== 'ממתין לשיחת מנהל') return false
-  return businessDaysBetween(new Date(c.updated_at), new Date()) > 2
+  return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 
 export function isMgrActiveOverdue(c: any): boolean {
   if (c.status_name !== 'בטיפול בשיחת מנהל' && c.status_name !== 'בטיפול לאחר שיחת מנהל') return false
-  return businessDaysBetween(new Date(c.updated_at), new Date()) > 2
+  return businessDaysBetween(new Date(c.updated_at), new Date()) >= 2
 }
 
 export function fmt(d: string | null): string {
