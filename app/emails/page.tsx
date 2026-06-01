@@ -102,8 +102,28 @@ export default function EmailsPage() {
     return new Date(d).toLocaleString('he-IL', { timeZone:'Asia/Jerusalem', day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
   }
 
-  function daysSince(d: string) {
-    return Math.floor((Date.now() - new Date(d).getTime()) / 864e5)
+  function businessDaysSince(dateStr: string): number {
+    const start = new Date(dateStr)
+    const end = new Date()
+    start.setHours(0,0,0,0)
+    end.setHours(0,0,0,0)
+    if (start >= end) return 0
+    let count = 0
+    const cur = new Date(start)
+    cur.setDate(cur.getDate() + 1)
+    while (cur <= end) {
+      const dow = cur.getDay()
+      if (dow !== 5 && dow !== 6) count++
+      cur.setDate(cur.getDate() + 1)
+    }
+    return count
+  }
+
+  function slaColor(days: number) {
+    if (days === 0) return { bg:'#f0fdf4', color:'#16a34a', border:'#86efac' }
+    if (days === 1) return { bg:'#fefce8', color:'#ca8a04', border:'#fde047' }
+    if (days === 2) return { bg:'#fff7ed', color:'#ea580c', border:'#fdba74' }
+    return { bg:'#fef2f2', color:'#dc2626', border:'#fca5a5' }
   }
 
   if (loading || !profile) return null
@@ -134,9 +154,10 @@ export default function EmailsPage() {
               {dataLoading ? <tr><td colSpan={6} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</td></tr>
               : stats.length === 0 ? <tr><td colSpan={6} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין נתונים — Webhook צריך לשלוח הודעות</td></tr>
               : stats.map(s => {
-                const days = daysSince(s.oldest)
+                const days = businessDaysSince(s.oldest)
+                const sla = slaColor(days)
                 return (
-                  <tr key={s.name} style={{ background: days > 7 ? '#fff5f5' : undefined }}>
+                  <tr key={s.name}>
                     <td style={{ fontWeight:700 }}>{s.name}</td>
                     <td style={{ textAlign:'center' }}><span className="badge b-gray">{s.total}</span></td>
                     <td style={{ textAlign:'center' }}>
@@ -144,8 +165,8 @@ export default function EmailsPage() {
                     </td>
                     <td style={{ fontSize:12 }}>{fmt(s.oldest)}</td>
                     <td>
-                      <span style={{ fontSize:12, fontWeight:700, color: days > 7 ? '#dc2626' : days > 3 ? '#d97706' : '#16a34a' }}>
-                        {days} ימים
+                      <span style={{ fontSize:13, fontWeight:800, padding:'3px 12px', borderRadius:999, background:sla.bg, color:sla.color, border:`1px solid ${sla.border}` }}>
+                        {days === 0 ? '✅ היום' : `${days} ימים`}
                       </span>
                     </td>
                     <td>
@@ -171,15 +192,20 @@ export default function EmailsPage() {
                   <thead><tr><th>טיקט ID</th><th>נושא</th><th>ערוץ</th><th>נפתח</th><th>עדכון אחרון</th><th>ימים</th></tr></thead>
                   <tbody>
                     {tickets.map(t => {
-                      const days = daysSince(t.first_msg)
+                      const days = businessDaysSince(t.first_msg)
+                      const sla = slaColor(days)
                       return (
-                        <tr key={t.ticket_id} style={{ background: days > 7 ? '#fff5f5' : undefined }}>
+                        <tr key={t.ticket_id}>
                           <td className="td-muted">#{t.ticket_id}</td>
                           <td style={{ fontSize:12, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.subject}</td>
                           <td><span className="badge b-blue" style={{ fontSize:10 }}>{t.channel}</span></td>
                           <td style={{ fontSize:11 }}>{fmt(t.first_msg)}</td>
                           <td style={{ fontSize:11, color:'var(--text3)' }}>{fmt(t.last_msg)}</td>
-                          <td><span style={{ fontWeight:700, color: days > 7 ? '#dc2626' : '#16a34a' }}>{days}</span></td>
+                          <td>
+                            <span style={{ fontSize:12, fontWeight:800, padding:'2px 10px', borderRadius:999, background:sla.bg, color:sla.color, border:`1px solid ${sla.border}` }}>
+                              {days === 0 ? 'היום' : `${days} ימים`}
+                            </span>
+                          </td>
                         </tr>
                       )
                     })}
