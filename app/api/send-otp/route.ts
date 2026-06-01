@@ -29,12 +29,14 @@ export async function POST(request: Request) {
     const accountSid = process.env.TWILIO_ACCOUNT_SID!
     const authToken = process.env.TWILIO_AUTH_TOKEN!
     const from = process.env.TWILIO_PHONE_NUMBER!
-    const phone = profile.phone.startsWith('0') ? '+972' + profile.phone.slice(1) : profile.phone
+    const phone = profile.phone.replace(/\D/g,'').replace(/^972/,'').replace(/^0/,'')
+    const phoneE164 = '+972' + phone
+    console.log('Sending OTP to:', phoneE164)
 
     await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
       method: 'POST',
       headers: { 'Authorization': 'Basic ' + Buffer.from(`${accountSid}:${authToken}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ To: phone, From: from, Body: `Controller CRM - קוד הכניסה שלך: ${code}\nתקף ל-5 דקות` })
+      body: new URLSearchParams({ To: phoneE164, From: from, Body: `Controller CRM - קוד הכניסה שלך: ${code}\nתקף ל-5 דקות` })
     })
 
     return NextResponse.json({ success: true })
