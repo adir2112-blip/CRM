@@ -30,7 +30,8 @@ export default function EmailsPage() {
     // Get open tickets from glassix_messages grouped by department
     const { data } = await supabase
       .from('glassix_messages')
-      .select('ticket_id, department, channel, created_at, ticket_status')
+      .select('ticket_id, department, channel, created_at, ticket_status, sender_name, sender_type')
+      .ilike('channel', '%mail%')
       .order('created_at', { ascending: true })
 
     if (!data) { setDataLoading(false); return }
@@ -66,8 +67,7 @@ export default function EmailsPage() {
       const deptName = DEPT_MAP[deptKey] || deptKey
       if (!deptMap[deptName]) deptMap[deptName] = { name: deptName, total: 0, open: 0, oldest: t.first_msg }
       deptMap[deptName].total++
-      // Count as open only if has human involvement and not closed
-      if (t.status !== 'Closed' && t.status !== 'closed' && t.hasHuman) deptMap[deptName].open++
+      if (t.status !== 'Closed' && t.status !== 'closed') deptMap[deptName].open++
       if (t.first_msg < deptMap[deptName].oldest) deptMap[deptName].oldest = t.first_msg
     })
 
@@ -80,6 +80,7 @@ export default function EmailsPage() {
     const { data } = await supabase
       .from('glassix_messages')
       .select('ticket_id, department, channel, created_at, text, sender_name, sender_type')
+      .ilike('channel', '%mail%')
       .order('created_at', { ascending: true })
 
     if (!data) return
