@@ -6,10 +6,39 @@ import Topbar from '@/components/Topbar'
 
 // Map department identifiers to org names
 const DEPT_MAP: Record<string, string> = {
+  // כללית אקטיב+
   '972523481937': 'כללית אקטיב+',
   'active@movement4life.co.il': 'כללית אקטיב+',
   'Active@movement4life.co.il': 'כללית אקטיב+',
   '972559983925': 'כללית אקטיב+',
+  // עובדים בריא 360
+  '972799120535': 'עובדים בריא 360',
+  '97279912053': 'עובדים בריא 360',
+  'ovdim.bari@movement4life.co.il': 'עובדים בריא 360',
+  // מעוף לעמית
+  '97236939342': 'מעוף לעמית',
+  'maoflamit@m4l.co.il': 'מעוף לעמית',
+  'Maoflamit@m4l.co.il': 'מעוף לעמית',
+  // לאומית FIT
+  '972747008676': 'לאומית FIT',
+  'leumitfit@movement4life.co.il': 'לאומית FIT',
+  'LeumitFIT@movement4life.co.il': 'לאומית FIT',
+  // מאוחדת
+  '972747008669': 'מאוחדת',
+  'meuhedetwow@movement-group.com': 'מאוחדת',
+  'Meuhedetwow@movement-group.com': 'מאוחדת',
+}
+
+function resolveDept(dept: string): string {
+  if (!dept) return 'לא ידוע'
+  // Try exact match
+  if (DEPT_MAP[dept]) return DEPT_MAP[dept]
+  // Try lowercase
+  const lower = dept.toLowerCase()
+  for (const [key, val] of Object.entries(DEPT_MAP)) {
+    if (key.toLowerCase() === lower) return val
+  }
+  return dept
 }
 
 export default function EmailsPage() {
@@ -64,7 +93,7 @@ export default function EmailsPage() {
     const deptMap: Record<string, { name: string, total: number, open: number, oldest: string }> = {}
     allTickets.forEach((t: any) => {
       const deptKey = t.department || 'לא ידוע'
-      const deptName = DEPT_MAP[deptKey] || deptKey
+      const deptName = resolveDept(deptKey)
       if (!deptMap[deptName]) deptMap[deptName] = { name: deptName, total: 0, open: 0, oldest: t.first_msg }
       deptMap[deptName].total++
       if (t.status !== 'Closed' && t.status !== 'closed') deptMap[deptName].open++
@@ -87,7 +116,7 @@ export default function EmailsPage() {
 
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
-      const deptName = DEPT_MAP[m.department || ''] || m.department || 'לא ידוע'
+      const deptName = resolveDept(m.department || '')
       if (deptName !== dept) return
       if (!ticketMap[m.ticket_id]) {
         ticketMap[m.ticket_id] = { ticket_id: m.ticket_id, first_msg: m.created_at, last_msg: m.created_at, subject: m.text?.slice(0,60) || '', channel: m.channel }
