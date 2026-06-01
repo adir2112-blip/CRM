@@ -35,7 +35,7 @@ export default function EmailsPage() {
 
     if (!data) { setDataLoading(false); return }
 
-    // Group by ticket_id — get unique tickets
+    // Group by ticket_id — get unique tickets (ignore bot-only tickets)
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
@@ -44,13 +44,19 @@ export default function EmailsPage() {
           department: m.department || 'לא ידוע',
           channel: m.channel || 'WhatsApp',
           first_msg: m.created_at,
-          status: m.ticket_status || 'Open'
+          status: m.ticket_status || 'Open',
+          hasHuman: false
         }
       }
       // Update status if newer info
       if (m.ticket_status) ticketMap[m.ticket_id].status = m.ticket_status
+      // Mark if has human agent (not bot)
+      if (m.sender_type === 'Agent' && m.sender_name && m.sender_name !== 'בוט' && m.sender_name !== 'Bot' && !m.sender_name?.toLowerCase().includes('bot')) {
+        ticketMap[m.ticket_id].hasHuman = true
+      }
     })
 
+    // Only show tickets that had human agent involvement OR are from client only
     const allTickets = Object.values(ticketMap)
 
     // Group by department
@@ -60,8 +66,8 @@ export default function EmailsPage() {
       const deptName = DEPT_MAP[deptKey] || deptKey
       if (!deptMap[deptName]) deptMap[deptName] = { name: deptName, total: 0, open: 0, oldest: t.first_msg }
       deptMap[deptName].total++
-      // Count as open if status is not Closed
-      if (t.status !== 'Closed' && t.status !== 'closed') deptMap[deptName].open++
+      // Count as open only if has human involvement and not closed
+      if (t.status !== 'Closed' && t.status !== 'closed' && t.hasHuman) deptMap[deptName].open++
       if (t.first_msg < deptMap[deptName].oldest) deptMap[deptName].oldest = t.first_msg
     })
 
