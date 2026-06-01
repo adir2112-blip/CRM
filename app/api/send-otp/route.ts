@@ -11,8 +11,9 @@ export async function POST(request: Request) {
     const { email } = await request.json()
     if (!email) return NextResponse.json({ error: 'נדרש מייל' }, { status: 400 })
 
-    const { data: users } = await supabase.auth.admin.listUsers()
-    const authUser = (users?.users || []).find((u: any) => u.email === email)
+    // Get user by email directly
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    const authUser = (users || []).find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
     if (!authUser) return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
 
     const { data: profile } = await supabase.from('profiles').select('phone, full_name').eq('id', authUser.id).single()

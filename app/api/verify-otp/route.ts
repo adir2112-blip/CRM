@@ -11,8 +11,8 @@ export async function POST(request: Request) {
     const { email, code } = await request.json()
     if (!email || !code) return NextResponse.json({ error: 'חסרים פרמטרים' }, { status: 400 })
 
-    const { data: users } = await supabase.auth.admin.listUsers()
-    const authUser = users?.users?.find(u => u.email === email)
+    const { data: { users }, error: usersError } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+    const authUser = (users || []).find((u: any) => u.email?.toLowerCase() === email.toLowerCase())
     if (!authUser) return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
 
     const { data: otp } = await supabase.from('otp_codes')
