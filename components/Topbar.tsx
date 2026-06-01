@@ -268,6 +268,7 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
           fontWeight:700, fontSize:13, textDecoration:'none', fontFamily:'Heebo,sans-serif',
           boxShadow:'0 2px 8px rgba(5,150,105,0.35)', border:'none', gap:4
         }}>＋ פניה חדשה</Link>
+        {isAdmin && <Link href="/emails" className={`nav-btn${pathname === '/emails' ? ' active' : ''}`}>📧 מיילים</Link>}
         {isAdmin && <Link href="/cases" className={`nav-btn${pathname === '/cases' ? ' active' : ''}`}>📋 כל הפניות</Link>}
         {isAdmin && <Link href="/agents-status" className={`nav-btn${pathname === '/agents-status' ? ' active' : ''}`}>👥 בטיפול נציגים</Link>}
         {isAdmin && <Link href="/reports" className={`nav-btn${pathname === '/reports' ? ' active' : ''}`}>📊 דוחות</Link>}

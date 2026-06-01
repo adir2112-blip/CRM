@@ -54,15 +54,14 @@ export async function POST(request: Request) {
 
         const participant = tx.fromParticipant || {}
         const isClient = participant.type === 'Client'
+        const department = participant.departmentIdentifier || ''
+        const channel = tx.fromProtocolType || 'WhatsApp'
 
-        // Try to get client phone from ticket
         let clientPhone: string | null = null
         if (!isClient) {
-          // Message from agent — get client phone from ticket
           if (!token) token = await getGlassixToken()
           if (token) clientPhone = await getTicketParticipants(String(ticketId), token)
         } else {
-          // Message from client — use their identifier
           clientPhone = (participant.identifier || '').replace(/\D/g, '').replace(/^972/, '0')
         }
 
@@ -73,6 +72,8 @@ export async function POST(request: Request) {
           sender_name: participant.name || '',
           sender_type: isClient ? 'Client' : 'Agent',
           client_phone: clientPhone,
+          department,
+          channel,
           created_at: tx.dateTime || new Date().toISOString(),
           ticket_data: JSON.stringify({ ticketId, participant, clientPhone })
         }, { onConflict: 'message_id' })
