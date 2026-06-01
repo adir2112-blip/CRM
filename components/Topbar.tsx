@@ -43,6 +43,23 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     if (userName) checkReminders()
   }, [userName])
 
+  // Auto-logout after 1 hour inactivity
+  useEffect(() => {
+    if (!userName) return
+    let inactivityTimer: ReturnType<typeof setTimeout>
+    function resetTimer() {
+      clearTimeout(inactivityTimer)
+      inactivityTimer = setTimeout(async () => {
+        await supabase.auth.signOut()
+        window.location.href = '/login'
+      }, 60 * 60 * 1000)
+    }
+    const events = ['mousedown','keydown','scroll','touchstart','click']
+    events.forEach(e => window.addEventListener(e, resetTimer))
+    resetTimer()
+    return () => { clearTimeout(inactivityTimer); events.forEach(e => window.removeEventListener(e, resetTimer)) }
+  }, [userName])
+
   // Session tracking
   useEffect(() => {
     if (!userName || !userEmail) return

@@ -17,13 +17,41 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) {
-      setError('מייל או סיסמא שגויים')
+
+    // Check if blocked
+    const checkRes = await fetch(`/api/login-attempt?email=${encodeURIComponent(email)}`)
+    const checkData = await checkRes.json()
+    if (checkData.blocked) {
+      const until = checkData.until ? new Date(checkData.until).toLocaleTimeString('he-IL', { hour:'2-digit', minute:'2-digit' }) : ''
+      setError(`🔒 החשבון חסום עד ${until} עקב ניסיונות כניסה חוזרים`)
       setLoading(false)
       return
     }
+
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError) {
+      // Log failed attempt
+      await fetch('/api/login-attempt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, success: false, userAgent: navigator.userAgent })
+      }).then(r => r.json()).then(d => {
+        if (d.blocked) setError('🔒 החשבון נחסם לאחר 5 ניסיונות כושלים. המנהל יכול לשחרר.')
+        else setError(`מייל או סיסמא שגויים (ניסיון ${d.attempts}/5)`)
+      })
+      setLoading(false)
+      return
+    }
+
+    // Log success
+    await fetch('/api/login-attempt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, success: true, userAgent: navigator.userAgent })
+    })
+
     // Send OTP
     const res = await fetch('/api/send-otp', {
       method: 'POST',
@@ -32,8 +60,6 @@ export default function LoginPage() {
     })
     const data = await res.json()
     if (data.error === 'no_phone') {
-      // No phone — allow login without OTP
-      setNoPhone(true)
       router.push('/dashboard')
       return
     }

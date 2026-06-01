@@ -7,6 +7,77 @@ import * as XLSX from 'xlsx'
 
 const SUPER_ADMIN = 'adir2112@gmail.com'
 
+function SecurityTab() {
+  const supabase = createClient()
+  const [logs, setLogs] = useState<any[]>([])
+  const [blocked, setBlocked] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    setLoading(true)
+    const [{ data: logsData }, { data: blockedData }] = await Promise.all([
+      supabase.from('login_log').select('*').order('created_at', { ascending: false }).limit(50),
+      supabase.from('login_attempts').select('*').eq('blocked', true).order('last_attempt', { ascending: false })
+    ])
+    setLogs(logsData || [])
+    setBlocked(blockedData || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function unblock(email: string) {
+    await supabase.from('login_attempts').delete().eq('email', email)
+    load()
+  }
+
+  function fmt(d: string) {
+    return new Date(d).toLocaleString('he-IL', { timeZone:'Asia/Jerusalem', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
+  }
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
+        <div style={{ fontSize:13, fontWeight:700 }}>🔒 אבטחה וכניסות</div>
+        <button className="btn btn-xs" onClick={load}>🔄 רענן</button>
+      </div>
+
+      {blocked.length > 0 && (
+        <div style={{ marginBottom:20, padding:'14px 16px', background:'#fef2f2', borderRadius:12, border:'1px solid #fca5a5' }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#dc2626', marginBottom:10 }}>🔒 חשבונות חסומים ({blocked.length})</div>
+          {blocked.map(b => (
+            <div key={b.email} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #fecaca' }}>
+              <div>
+                <div style={{ fontWeight:600, fontSize:13 }}>{b.email}</div>
+                <div style={{ fontSize:11, color:'#9ca3af' }}>חסום עד: {b.blocked_until ? fmt(b.blocked_until) : 'ידנית'} · {b.attempts} ניסיונות</div>
+              </div>
+              <button className="btn btn-xs" style={{ background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0' }} onClick={() => unblock(b.email)}>🔓 שחרר</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="card" style={{ padding:0 }}>
+        <div style={{ padding:'12px 16px', fontSize:12, fontWeight:700, borderBottom:'1px solid var(--border)' }}>לוג כניסות אחרונות</div>
+        <table>
+          <thead><tr><th>מייל</th><th>תאריך</th><th>סטטוס</th><th>הערה</th></tr></thead>
+          <tbody>
+            {loading ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</td></tr>
+            : logs.map((l, i) => (
+              <tr key={i} style={{ background: l.success ? undefined : '#fff5f5' }}>
+                <td style={{ fontSize:12 }}>{l.email}</td>
+                <td style={{ fontSize:11, color:'var(--text3)' }}>{fmt(l.created_at)}</td>
+                <td><span className={`badge ${l.success ? 'b-green' : 'b-red'}`}>{l.success ? '✅ הצלחה' : '❌ כישלון'}</span></td>
+                <td style={{ fontSize:11, color:'var(--text3)' }}>{l.note || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 function AdminLeaderboardTab() {
   const supabase = createClient()
   const [board, setBoard] = useState<any[]>([])
@@ -697,7 +768,7 @@ export default function AdminPage() {
   const isSuperAdmin = profile?.is_super_admin === true || profile?.email === 'adir2112@gmail.com'
 
   // Tabs based on role
-  const superAdminTabs = [['users','משתמשים'],['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים']]
+  const superAdminTabs = [['users','משתמשים'],['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['statuses','סטטוסים'],['orgs','ארגונים'],['cats','סיווגים'],['suppliers','ספקים והטבות'],['sms','SMS תבניות'],['activity','יומן שינויים'],['security','🔒 אבטחה']]
   const adminTabs = [['online','🟢 מחוברים'],['leaderboard','🏆 תחרות'],['agent-stats','סטטיסטיקות נציגים'],['sms','SMS תבניות']]
   const visibleTabs = isSuperAdmin ? superAdminTabs : adminTabs
 
@@ -992,7 +1063,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {tab === 'online' && <OnlineUsersTab />}
+        {tab === 'security' && <SecurityTab />}
         {tab === 'leaderboard' && <AdminLeaderboardTab />}
 
         {tab === 'agent-stats' && (
