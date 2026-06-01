@@ -34,7 +34,7 @@ export default function EmailsPage() {
 
     if (!data) { setDataLoading(false); return }
 
-    // Group by ticket_id — get unique open tickets
+    // Group by ticket_id — get unique tickets
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
@@ -46,6 +46,8 @@ export default function EmailsPage() {
           status: m.ticket_status || 'Open'
         }
       }
+      // Update status if newer info
+      if (m.ticket_status) ticketMap[m.ticket_id].status = m.ticket_status
     })
 
     const allTickets = Object.values(ticketMap)
@@ -57,7 +59,8 @@ export default function EmailsPage() {
       const deptName = DEPT_MAP[deptKey] || deptKey
       if (!deptMap[deptName]) deptMap[deptName] = { name: deptName, total: 0, open: 0, oldest: t.first_msg }
       deptMap[deptName].total++
-      if (t.status !== 'Closed') deptMap[deptName].open++
+      // Count as open if status is not Closed
+      if (t.status !== 'Closed' && t.status !== 'closed') deptMap[deptName].open++
       if (t.first_msg < deptMap[deptName].oldest) deptMap[deptName].oldest = t.first_msg
     })
 
