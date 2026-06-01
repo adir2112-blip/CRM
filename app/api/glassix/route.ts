@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 const BASE_URL = `https://${process.env.GLASSIX_WORKSPACE || 'm4l-il'}.glassix.com`
 const CACHE_KEY = `glassix_tickets_${process.env.GLASSIX_WORKSPACE || 'm4l-il'}`
@@ -16,6 +12,7 @@ function toGlassixDate(d: Date): string {
 
 async function getToken(): Promise<string | null> {
   try {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: process.env.GLASSIX_API_KEY, apiSecret: process.env.GLASSIX_API_SECRET, userName: process.env.GLASSIX_USERNAME, workspace: process.env.GLASSIX_WORKSPACE || 'm4l-il' })
@@ -28,6 +25,7 @@ async function getToken(): Promise<string | null> {
 async function getTicketsWithCache(): Promise<any[]> {
   // Check cache
   try {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { data: cached } = await supabase.from('glassix_cache').select('tickets, updated_at').eq('cache_key', CACHE_KEY).single()
     if (cached?.tickets && cached?.updated_at) {
       const age = Date.now() - new Date(cached.updated_at).getTime()
@@ -63,6 +61,7 @@ async function getTicketsWithCache(): Promise<any[]> {
 
   if (hitRateLimit && allTickets.length === 0) {
     try {
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
       const { data: existing } = await supabase.from('glassix_cache').select('tickets').eq('cache_key', CACHE_KEY).single()
       if (existing?.tickets) { const p = JSON.parse(existing.tickets); if (p.length > 0) return p }
     } catch {}
@@ -71,6 +70,7 @@ async function getTicketsWithCache(): Promise<any[]> {
 
   if (allTickets.length > 0) {
     try {
+      const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
       await supabase.from('glassix_cache').upsert({ cache_key: CACHE_KEY, tickets: JSON.stringify(allTickets), updated_at: new Date().toISOString() }, { onConflict: 'cache_key' })
     } catch {}
   }
@@ -80,6 +80,7 @@ async function getTicketsWithCache(): Promise<any[]> {
 
 export async function GET(request: Request) {
   try {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { searchParams } = new URL(request.url)
     const phone = searchParams.get('phone')
     const email = searchParams.get('email')

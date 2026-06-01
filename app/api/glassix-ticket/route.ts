@@ -7,10 +7,6 @@ const API_KEY = process.env.GLASSIX_API_KEY!
 const API_SECRET = process.env.GLASSIX_API_SECRET!
 const USERNAME = process.env.GLASSIX_USERNAME!
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 let tokenCache: { token: string; expires: number } | null = null
 
@@ -52,6 +48,7 @@ function detectType(text: string, senderType: string, agentName: string, clientN
 
 export async function GET(request: Request) {
   try {
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('id')
     if (!ticketId) return NextResponse.json({ error: 'חסר מזהה' }, { status: 400 })
