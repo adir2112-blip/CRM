@@ -6,21 +6,46 @@ export async function POST(request: Request) {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     const { email, success, userAgent } = await request.json()
 
+    // Get or create attempt record
+    const { data: existing } = await supabase
+      .from('login_attempts')
+      .select('*')
+      .eq('email', email)
+      .single()
+
     if (success) {
-      await supabase.from('login_attempts').delete().eq('email', email)
-      await supabase.from('login_log').insert({ email, user_agent: userAgent, created_at: new Date().toISOString(), success: true })
+      // Log successful login
+      await supabase.from('login_log').insert({
+        email,
+        success: true,
+        user_agent: userAgent,
+        ip: request.headers.get('x-forwarded-for') || '',
+        created_at: new Date().toISOString()
+      })
+      // Reset failed attempts
+      if (existing) {
+        await supabase.from('login_attempts').update({ count: 0, blocked_until: null }).eq('email', email)
+      }
       return NextResponse.json({ ok: true })
     }
 
-    const { data: existing } = await supabase.from('login_attempts').select('*').eq('email', email).single()
-    const attempts = (existing?.attempts || 0) + 1
-    const blocked = attempts >= 5
-    const blockedUntil = blocked ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null
+    // Failed attempt
+    const count = (existing?.count || 0) + 1
+    const blockedUntil = count >= 5 ? new Date(Date.now() + 15 * 60 * 1000).toISOString() : null
 
-    await supabase.from('login_attempts').upsert({ email, attempts, blocked, blocked_until: blockedUntil, last_attempt: new Date().toISOString() }, { onConflict: 'email' })
-    await supabase.from('login_log').insert({ email, user_agent: userAgent, created_at: new Date().toISOString(), success: false, note: blocked ? '🔒 נחסם לאחר 5 ניסיונות' : `ניסיון ${attempts}/5` })
+    if (existing) {
+      await supabase.from('login_attempts').update({ count, blocked_until: blockedUntil, last_attempt: new Date().toISOString() }).eq('email', email)
+    } else {
+      await supabase.from('login_attempts').insert({ email, count, blocked_until: blockedUntil, last_attempt: new Date().toISOString() })
+    }
 
-    return NextResponse.json({ ok: true, blocked, attempts })
+    await supabase.from('login_log').insert({
+      email, success: false, user_agent: userAgent,
+      ip: request.headers.get('x-forwarded-for') || '',
+      created_at: new Date().toISOString()
+    })
+
+    return NextResponse.json({ ok: true, blocked: count >= 5, count })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
@@ -29,15 +54,15 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   try {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-    const email = new URL(request.url).searchParams.get('email')
+    const { searchParams } = new URL(request.url)
+    const email = searchParams.get('email')
     if (!email) return NextResponse.json({ blocked: false })
+
     const { data } = await supabase.from('login_attempts').select('*').eq('email', email).single()
-    if (!data?.blocked) return NextResponse.json({ blocked: false })
-    if (data.blocked_until && new Date(data.blocked_until) < new Date()) {
-      await supabase.from('login_attempts').delete().eq('email', email)
-      return NextResponse.json({ blocked: false })
-    }
-    return NextResponse.json({ blocked: true, until: data.blocked_until, attempts: data.attempts })
+    if (!data) return NextResponse.json({ blocked: false })
+
+    const isBlocked = data.blocked_until && new Date(data.blocked_until) > new Date()
+    return NextResponse.json({ blocked: isBlocked, count: data.count, blockedUntil: data.blocked_until })
   } catch {
     return NextResponse.json({ blocked: false })
   }

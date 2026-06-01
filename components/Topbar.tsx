@@ -60,7 +60,29 @@ export default function Topbar({ userName, userRole, userEmail, onOpenCase }: To
     return () => { clearTimeout(inactivityTimer); events.forEach(e => window.removeEventListener(e, resetTimer)) }
   }, [userName])
 
-  // Session tracking
+  // Inactivity logout after 60 minutes
+  useEffect(() => {
+    if (!userName) return
+    let inactivityTimer: NodeJS.Timeout
+
+    function resetTimer() {
+      clearTimeout(inactivityTimer)
+      inactivityTimer = setTimeout(async () => {
+        const supabaseClient = createClient()
+        await supabaseClient.auth.signOut()
+        window.location.href = '/login?reason=inactivity'
+      }, 60 * 60 * 1000) // 60 minutes
+    }
+
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click']
+    events.forEach(e => window.addEventListener(e, resetTimer))
+    resetTimer()
+
+    return () => {
+      clearTimeout(inactivityTimer)
+      events.forEach(e => window.removeEventListener(e, resetTimer))
+    }
+  }, [userName])
   useEffect(() => {
     if (!userName || !userEmail) return
     let sessionId: string | null = null

@@ -9,66 +9,68 @@ const SUPER_ADMIN = 'adir2112@gmail.com'
 
 function SecurityTab() {
   const supabase = createClient()
+  const [attempts, setAttempts] = useState<any[]>([])
   const [logs, setLogs] = useState<any[]>([])
-  const [blocked, setBlocked] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   async function load() {
     setLoading(true)
-    const [{ data: logsData }, { data: blockedData }] = await Promise.all([
-      supabase.from('login_log').select('*').order('created_at', { ascending: false }).limit(50),
-      supabase.from('login_attempts').select('*').eq('blocked', true).order('last_attempt', { ascending: false })
+    const [{ data: att }, { data: lg }] = await Promise.all([
+      supabase.from('login_attempts').select('*').order('last_attempt', { ascending: false }),
+      supabase.from('login_log').select('*').order('created_at', { ascending: false }).limit(50)
     ])
-    setLogs(logsData || [])
-    setBlocked(blockedData || [])
+    setAttempts(att || [])
+    setLogs(lg || [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  async function unblock(email: string) {
-    await supabase.from('login_attempts').delete().eq('email', email)
-    load()
-  }
-
   function fmt(d: string) {
     return new Date(d).toLocaleString('he-IL', { timeZone:'Asia/Jerusalem', day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })
   }
 
+  async function unblock(email: string) {
+    await supabase.from('login_attempts').update({ count: 0, blocked_until: null }).eq('email', email)
+    load()
+  }
+
+  const blocked = attempts.filter(a => a.blocked_until && new Date(a.blocked_until) > new Date())
+
   return (
     <div>
-      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:16 }}>
-        <div style={{ fontSize:13, fontWeight:700 }}>🔒 אבטחה וכניסות</div>
-        <button className="btn btn-xs" onClick={load}>🔄 רענן</button>
-      </div>
+      <div style={{ fontSize:13, fontWeight:700, marginBottom:16 }}>🔐 אבטחה וכניסות</div>
 
+      {/* Blocked users */}
       {blocked.length > 0 && (
-        <div style={{ marginBottom:20, padding:'14px 16px', background:'#fef2f2', borderRadius:12, border:'1px solid #fca5a5' }}>
-          <div style={{ fontSize:12, fontWeight:700, color:'#dc2626', marginBottom:10 }}>🔒 חשבונות חסומים ({blocked.length})</div>
-          {blocked.map(b => (
-            <div key={b.email} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #fecaca' }}>
+        <div className="card card-pad" style={{ marginBottom:16, border:'2px solid #fca5a5', background:'#fff5f5' }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#dc2626', marginBottom:10 }}>🚫 משתמשים חסומים ({blocked.length})</div>
+          {blocked.map(a => (
+            <div key={a.email} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'8px 0', borderBottom:'1px solid #fee2e2' }}>
               <div>
-                <div style={{ fontWeight:600, fontSize:13 }}>{b.email}</div>
-                <div style={{ fontSize:11, color:'#9ca3af' }}>חסום עד: {b.blocked_until ? fmt(b.blocked_until) : 'ידנית'} · {b.attempts} ניסיונות</div>
+                <div style={{ fontWeight:600, fontSize:13 }}>{a.email}</div>
+                <div style={{ fontSize:11, color:'#9ca3af' }}>חסום עד: {fmt(a.blocked_until)}</div>
               </div>
-              <button className="btn btn-xs" style={{ background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0' }} onClick={() => unblock(b.email)}>🔓 שחרר</button>
+              <button className="btn btn-xs" style={{ background:'#dcfce7', color:'#15803d', border:'1px solid #bbf7d0' }} onClick={() => unblock(a.email)}>🔓 שחרר</button>
             </div>
           ))}
         </div>
       )}
 
+      {/* Login log */}
       <div className="card" style={{ padding:0 }}>
         <div style={{ padding:'12px 16px', fontSize:12, fontWeight:700, borderBottom:'1px solid var(--border)' }}>לוג כניסות אחרונות</div>
         <table>
-          <thead><tr><th>מייל</th><th>תאריך</th><th>סטטוס</th><th>הערה</th></tr></thead>
+          <thead><tr><th>מייל</th><th>תאריך</th><th>סטטוס</th><th>דפדפן</th></tr></thead>
           <tbody>
-            {loading ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>טוען...</td></tr>
+            {loading ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem' }}>טוען...</td></tr>
+            : logs.length === 0 ? <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>אין לוגים</td></tr>
             : logs.map((l, i) => (
-              <tr key={i} style={{ background: l.success ? undefined : '#fff5f5' }}>
+              <tr key={i} style={{ background: !l.success ? '#fff5f5' : undefined }}>
                 <td style={{ fontSize:12 }}>{l.email}</td>
                 <td style={{ fontSize:11, color:'var(--text3)' }}>{fmt(l.created_at)}</td>
                 <td><span className={`badge ${l.success ? 'b-green' : 'b-red'}`}>{l.success ? '✅ הצלחה' : '❌ כישלון'}</span></td>
-                <td style={{ fontSize:11, color:'var(--text3)' }}>{l.note || '—'}</td>
+                <td style={{ fontSize:10, color:'var(--text3)', maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{l.user_agent?.split(' ').slice(-1)[0] || '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -1065,6 +1067,7 @@ export default function AdminPage() {
 
         {tab === 'security' && <SecurityTab />}
         {tab === 'leaderboard' && <AdminLeaderboardTab />}
+        {tab === 'security' && <SecurityTab />}
 
         {tab === 'agent-stats' && (
           <AgentStatsTab />

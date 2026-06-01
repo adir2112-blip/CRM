@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 
@@ -12,6 +12,12 @@ export default function LoginPage() {
   const [step, setStep] = useState<'login'|'otp'>('login')
   const [otp, setOtp] = useState('')
   const [noPhone, setNoPhone] = useState(false)
+
+  // Show inactivity message
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('reason') === 'inactivity') setError('⏱️ נותקת אוטומטית עקב חוסר פעילות')
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
