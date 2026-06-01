@@ -147,6 +147,11 @@ export default function NewCasePage() {
 
   return (
     <>
+      <style>{`
+        select option { color: #1e293b !important; }
+        select option:first-child { color: #64748b; }
+        select { color: #1e293b !important; }
+      `}</style>
       <Topbar userName={profile?.full_name || ''} userRole={profile?.role || 'agent'} userEmail={profile?.email || ''} />
       <div style={{ minHeight: '100vh', background: '#f1f5f9', padding: '28px 24px' }}>
         <div style={{ maxWidth: 1100, margin: '0 auto' }}>
@@ -228,7 +233,7 @@ export default function NewCasePage() {
                     <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>ארגון / פעילות *</label>
                     <div style={{ position: 'relative' }}>
                       <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 14, pointerEvents: 'none' }}>🏢</span>
-                      <select style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: form.org_id ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const, boxSizing: 'border-box' as const }} value={form.org_id} onChange={e => handleOrgChange(e.target.value)}>
+                      <select style={{ width: '100%', padding: '10px 36px 10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', appearance: 'none' as const, boxSizing: 'border-box' as const }} value={form.org_id} onChange={e => handleOrgChange(e.target.value)}>
                         <option value="">בחר ארגון</option>
                         {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                       </select>
@@ -249,7 +254,7 @@ export default function NewCasePage() {
                 <div className="form-row">
                   <div className="form-group">
                     <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>סטטוס *</label>
-                    <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: form.status_id ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const }} value={form.status_id} onChange={e => { const s = statuses.find(x => x.id === e.target.value); setForm(f => ({ ...f, status_id: e.target.value, status_name: s?.name || '' })) }}>
+                    <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: '#fff', color: '#1e293b', outline: 'none', appearance: 'none' as const }} value={form.status_id} onChange={e => { const s = statuses.find(x => x.id === e.target.value); setForm(f => ({ ...f, status_id: e.target.value, status_name: s?.name || '' })) }}>
                       <option value="">בחר סטטוס</option>
                       {statuses.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
@@ -285,7 +290,7 @@ export default function NewCasePage() {
                   ].map(f2 => (
                     <div key={f2.label} className="form-group">
                       <label style={{ fontSize: 11, fontWeight: 700, color: '#1e293b', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: 6, display: 'block' }}>{f2.label}</label>
-                      <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: f2.disabled ? '#f1f5f9' : '#f8fafc', color: f2.value ? '#1e293b' : '#94a3b8', outline: 'none', appearance: 'none' as const, opacity: f2.disabled ? 0.6 : 1 }} value={f2.value} onChange={e => f2.onChange(e.target.value)} disabled={f2.disabled}>
+                      <select style={{ width: '100%', padding: '10px 14px', borderRadius: 8, border: '2px solid #cbd5e1', fontSize: 13, fontFamily: 'Heebo,sans-serif', background: f2.disabled ? '#f1f5f9' : '#f8fafc', color: '#1e293b', outline: 'none', appearance: 'none' as const, opacity: f2.disabled ? 0.6 : 1 }} value={f2.value} onChange={e => f2.onChange(e.target.value)} disabled={f2.disabled}>
                         <option value="">{f2.placeholder}</option>
                         {f2.list.map((c: any) => <option key={c.id} value={c.id}>{c.name}{f2.dynamic && c.opens_dynamic ? ' 📦' : ''}</option>)}
                       </select>
