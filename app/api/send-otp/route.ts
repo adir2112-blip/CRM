@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     if (!email) return NextResponse.json({ error: 'נדרש מייל' }, { status: 400 })
 
     const { data: users } = await supabase.auth.admin.listUsers()
-    const authUser = users?.users?.find(u => u.email === email)
+    const authUser = (users?.users || []).find((u: any) => u.email === email)
     if (!authUser) return NextResponse.json({ error: 'משתמש לא נמצא' }, { status: 404 })
 
     const { data: profile } = await supabase.from('profiles').select('phone, full_name').eq('id', authUser.id).single()
