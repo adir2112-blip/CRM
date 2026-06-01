@@ -9,19 +9,67 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [step, setStep] = useState<'login'|'otp'>('login')
+  const [otp, setOtp] = useState('')
+  const [noPhone, setNoPhone] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    if (authError) {
       setError('מייל או סיסמא שגויים')
       setLoading(false)
-    } else {
-      router.push('/dashboard')
+      return
     }
+    // Send OTP
+    const res = await fetch('/api/send-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    })
+    const data = await res.json()
+    if (data.error === 'no_phone') {
+      // No phone — allow login without OTP
+      setNoPhone(true)
+      router.push('/dashboard')
+      return
+    }
+    if (data.error) {
+      setError('שגיאה בשליחת SMS: ' + data.error)
+      await supabase.auth.signOut()
+      setLoading(false)
+      return
+    }
+    setLoading(false)
+    setStep('otp')
+  }
+
+  async function handleOtp(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    const res = await fetch('/api/verify-otp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code: otp })
+    })
+    const data = await res.json()
+    if (data.error) {
+      setError(data.error === 'קוד שגוי' ? 'קוד שגוי — נסה שוב' : data.error === 'הקוד פג תוקף' ? 'הקוד פג תוקף — בקש קוד חדש' : data.error)
+      setLoading(false)
+      return
+    }
+    router.push('/dashboard')
+  }
+
+  async function resendOtp() {
+    setError('')
+    setOtp('')
+    await fetch('/api/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
+    setError('קוד חדש נשלח ✓')
   }
 
   return (
@@ -152,59 +200,58 @@ export default function LoginPage() {
             <div style={{ fontSize: 14, color: '#64748b' }}>הכנס לחשבונך כדי להמשיך</div>
           </div>
 
+          {step === 'login' ? (
           <form onSubmit={handleLogin}>
             <div style={{ marginBottom: 18 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'block' }}>כתובת מייל</label>
               <div style={{ position: 'relative' }}>
                 <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16 }}>📧</span>
-                <input
-                  className="login-field"
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="name@company.com"
-                  required
-                  style={{ width: '100%', padding: '13px 42px 13px 16px', borderRadius: 12, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: 'Heebo, sans-serif', background: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' as const, direction: 'ltr', textAlign: 'right' }}
-                />
+                <input className="login-field" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.com" required style={{ width: '100%', padding: '13px 42px 13px 16px', borderRadius: 12, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: 'Heebo, sans-serif', background: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' as const, direction: 'ltr', textAlign: 'right' }} />
               </div>
             </div>
-
             <div style={{ marginBottom: 28 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8, display: 'block' }}>סיסמא</label>
               <div style={{ position: 'relative' }}>
                 <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16 }}>🔒</span>
-                <input
-                  className="login-field"
-                  type="password"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  style={{ width: '100%', padding: '13px 42px 13px 16px', borderRadius: 12, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: 'Heebo, sans-serif', background: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' as const }}
-                />
+                <input className="login-field" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required style={{ width: '100%', padding: '13px 42px 13px 16px', borderRadius: 12, border: '1.5px solid #e2e8f0', fontSize: 14, fontFamily: 'Heebo, sans-serif', background: '#f8fafc', color: '#0f172a', boxSizing: 'border-box' as const }} />
               </div>
             </div>
-
-            {error && (
-              <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 16, padding: '10px 14px', background: '#fef2f2', borderRadius: 10, border: '1px solid #fca5a5', display: 'flex', alignItems: 'center', gap: 8 }}>
-                ⚠️ {error}
-              </div>
-            )}
-
-            <button
-              className="login-btn"
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%', padding: '14px', borderRadius: 12, border: 'none',
-                background: loading ? '#94a3b8' : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-                color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer',
-                fontFamily: 'Heebo, sans-serif', boxShadow: '0 4px 20px rgba(99,102,241,0.4)',
-                letterSpacing: '0.3px',
-              }}>
-              {loading ? '⏳ מתחבר...' : '🚀 כניסה למערכת'}
+            {error && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 16, padding: '10px 14px', background: '#fef2f2', borderRadius: 10, border: '1px solid #fca5a5' }}>⚠️ {error}</div>}
+            <button className="login-btn" type="submit" disabled={loading} style={{ width: '100%', padding: '14px', borderRadius: 12, border: 'none', background: loading ? '#94a3b8' : 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', fontSize: 15, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Heebo, sans-serif', boxShadow: '0 4px 20px rgba(99,102,241,0.4)' }}>
+              {loading ? '⏳ שולח קוד...' : '🚀 כניסה למערכת'}
             </button>
           </form>
+          ) : (
+          <form onSubmit={handleOtp}>
+            <div style={{ textAlign:'center', marginBottom:20 }}>
+              <div style={{ fontSize:36, marginBottom:10 }}>📱</div>
+              <div style={{ fontSize:16, fontWeight:700, color:'#1e293b', marginBottom:6 }}>אימות דו-שלבי</div>
+              <div style={{ fontSize:13, color:'#64748b' }}>נשלח קוד SMS למספר המחובר לחשבון</div>
+            </div>
+            <div style={{ marginBottom:20 }}>
+              <label style={{ fontSize:12, fontWeight:700, color:'#374151', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8, display:'block' }}>קוד אימות (6 ספרות)</label>
+              <input
+                className="login-field"
+                type="text"
+                value={otp}
+                onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
+                placeholder="000000"
+                maxLength={6}
+                required
+                autoFocus
+                style={{ width:'100%', padding:'16px', borderRadius:12, border:'1.5px solid #e2e8f0', fontSize:28, fontFamily:'monospace', background:'#f8fafc', color:'#0f172a', boxSizing:'border-box' as const, textAlign:'center', letterSpacing:8 }}
+              />
+            </div>
+            {error && <div style={{ color: error.includes('✓') ? '#16a34a' : '#dc2626', fontSize:13, marginBottom:16, padding:'10px 14px', background: error.includes('✓') ? '#f0fdf4' : '#fef2f2', borderRadius:10, border:`1px solid ${error.includes('✓') ? '#bbf7d0' : '#fca5a5'}` }}>{error}</div>}
+            <button className="login-btn" type="submit" disabled={loading || otp.length < 6} style={{ width:'100%', padding:'14px', borderRadius:12, border:'none', background: otp.length < 6 ? '#94a3b8' : 'linear-gradient(135deg,#059669,#10b981)', color:'#fff', fontSize:15, fontWeight:700, cursor: otp.length < 6 ? 'not-allowed' : 'pointer', fontFamily:'Heebo, sans-serif', marginBottom:12 }}>
+              {loading ? '⏳ מאמת...' : '✅ אמת ואתחבר'}
+            </button>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}>
+              <button type="button" onClick={() => { setStep('login'); setOtp(''); setError('') }} style={{ background:'none', border:'none', color:'#6366f1', cursor:'pointer', fontFamily:'Heebo,sans-serif', fontSize:12 }}>← חזרה</button>
+              <button type="button" onClick={resendOtp} style={{ background:'none', border:'none', color:'#64748b', cursor:'pointer', fontFamily:'Heebo,sans-serif', fontSize:12 }}>שלח קוד מחדש</button>
+            </div>
+          </form>
+          )}
 
           <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid #f1f5f9', textAlign: 'center' }}>
             <div style={{ fontSize: 11, color: '#94a3b8' }}>© {new Date().getFullYear()} CRM System · כל הזכויות שמורות</div>

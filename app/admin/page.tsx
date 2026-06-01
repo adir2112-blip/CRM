@@ -411,7 +411,7 @@ export default function AdminPage() {
   const supabase = createClient()
   const [tab, setTab] = useState('users')
   const [users, setUsers] = useState<any[]>([])
-  const [newUser, setNewUser] = useState({ email: '', password: '', full_name: '', role: 'agent' })
+  const [newUser, setNewUser] = useState({ email: '', password: '', full_name: '', role: 'agent', phone: '' })
   const [newUserOrgs, setNewUserOrgs] = useState<string[]>([])
   const [addingUser, setAddingUser] = useState(false)
   const [userFilter, setUserFilter] = useState('active')
@@ -439,6 +439,8 @@ export default function AdminPage() {
 
   const [editingUserOrgs, setEditingUserOrgs] = useState<any>(null)
   const [editUserOrgsList, setEditUserOrgsList] = useState<string[]>([])
+  const [editPhoneUser, setEditPhoneUser] = useState<any>(null)
+  const [editPhoneValue, setEditPhoneValue] = useState('')
   const [goalUser, setGoalUser] = useState<any>(null)
   const [goalValue, setGoalValue] = useState('')
   const [resetPassUser, setResetPassUser] = useState<any>(null)
@@ -536,7 +538,7 @@ export default function AdminPage() {
     const data = await res.json()
     if (data.error) { alert('שגיאה: ' + data.error); setAddingUser(false); return }
     setAddingUser(false)
-    setNewUser({ email: '', password: '', full_name: '', role: 'agent' })
+    setNewUser({ email: '', password: '', full_name: '', role: 'agent', phone: '' })
     setNewUserOrgs([])
     await logActivity(`הוסיף משתמש חדש: ${newUser.full_name} (${newUser.role})`, newUser.email)
     showToast('משתמש נוסף ✓')
@@ -726,6 +728,7 @@ export default function AdminPage() {
               <div className="form-row">
                 <div className="form-group"><label className="form-label">שם מלא</label><input className="form-input" value={newUser.full_name} onChange={e => setNewUser(p => ({ ...p, full_name: e.target.value }))} placeholder="שם מלא" /></div>
                 <div className="form-group"><label className="form-label">מייל</label><input className="form-input" type="email" value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="email@company.com" /></div>
+                <div className="form-group"><label className="form-label">טלפון (לOTP)</label><input className="form-input" type="tel" value={newUser.phone} onChange={e => setNewUser(p => ({ ...p, phone: e.target.value }))} placeholder="05XXXXXXXX" /></div>
               </div>
               <div className="form-row">
                 <div className="form-group"><label className="form-label">סיסמא</label><input className="form-input" type="password" value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="לפחות 6 תווים" /></div>
@@ -789,6 +792,7 @@ export default function AdminPage() {
                     <td style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                       <button className="btn btn-xs" style={{ background: 'var(--accent-lt)', color: 'var(--accent)', border: '1px solid rgba(37,99,235,0.2)' }} onClick={() => { setResetPassUser(u); setNewPass('') }}>איפוס סיסמא</button>
                       {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }} onClick={() => { setEditingUserOrgs(u); setEditUserOrgsList(u.allowed_orgs || []) }}>מחלקות</button>}
+                      <button className="btn btn-xs" style={{ background: '#f0f9ff', color: '#0284c7', border: '1px solid #bae6fd' }} onClick={() => { setEditPhoneUser(u); setEditPhoneValue(u.phone || '') }}>📱 {u.phone ? u.phone : 'הוסף טלפון'}</button>
                       {u.role === 'agent' && <button className="btn btn-xs" style={{ background: '#fef3c7', color: '#b45309', border: '1px solid #fcd34d' }} onClick={() => setGoalUser(u)}>🎯 יעד</button>}
                       {isSuperAdmin && u.role === 'admin' && u.id !== profile.id && (
                         <button className="btn btn-xs" style={{ background: u.is_super_admin ? '#fef3c7' : '#f8fafc', color: u.is_super_admin ? '#b45309' : '#64748b', border: `1px solid ${u.is_super_admin ? '#fcd34d' : '#e2e8f0'}` }}
@@ -999,6 +1003,29 @@ export default function AdminPage() {
           <ActivityLogTab />
         )}
       </div>
+
+      {/* Edit phone modal */}
+      {editPhoneUser && (
+        <div className="modal-overlay" onClick={e => { if(e.target===e.currentTarget) setEditPhoneUser(null) }}>
+          <div className="modal modal-sm">
+            <div className="modal-header">
+              <div className="modal-title">📱 טלפון — {editPhoneUser.full_name}</div>
+              <button className="close-btn" onClick={() => setEditPhoneUser(null)}>✕</button>
+            </div>
+            <div className="form-group">
+              <label className="form-label">מספר טלפון (לקבלת OTP)</label>
+              <input className="form-input" type="tel" value={editPhoneValue} onChange={e => setEditPhoneValue(e.target.value)} placeholder="05XXXXXXXX" />
+            </div>
+            <button className="btn btn-primary" style={{ width:'100%', justifyContent:'center' }} onClick={async () => {
+              await supabase.from('profiles').update({ phone: editPhoneValue }).eq('id', editPhoneUser.id)
+              await logActivity(`עדכן טלפון`, editPhoneUser.full_name)
+              setEditPhoneUser(null)
+              loadUsers()
+              showToast('טלפון עודכן ✓')
+            }}>שמור</button>
+          </div>
+        </div>
+      )}
 
       {/* Goal modal */}
       {goalUser && (
