@@ -9,6 +9,7 @@ const DEPT_MAP: Record<string, string> = {
   '972523481937': 'כללית אקטיב+',
   'active@movement4life.co.il': 'כללית אקטיב+',
   'Active@movement4life.co.il': 'כללית אקטיב+',
+  '972559983925': 'כללית אקטיב+',
 }
 
 export default function EmailsPage() {
