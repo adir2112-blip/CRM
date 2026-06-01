@@ -79,6 +79,16 @@ export async function POST(request: Request) {
         }, { onConflict: 'message_id' })
       }
 
+      if (event === 'TICKET_STATE_CHANGE') {
+        const ticketId = change.ticketId
+        const newState = change.state || change.newState || ''
+        if (ticketId && newState) {
+          await supabase.from('glassix_messages')
+            .update({ ticket_status: newState })
+            .eq('ticket_id', String(ticketId))
+        }
+      }
+
       if (event === 'NEW_TICKET') {
         await supabase.from('glassix_cache')
           .delete()
