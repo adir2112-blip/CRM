@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 const DEPT_MAP: Record<string, string> = {
   '972523481937': 'כללית אקטיב+',
   'active@movement4life.co.il': 'כללית אקטיב+',
@@ -108,7 +111,7 @@ export async function GET() {
       tickets: d.tickets
     })).sort((a: any, b: any) => b.open_tickets - a.open_tickets)
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       departments,
       summary: {
         total_departments: departments.length,
@@ -117,6 +120,8 @@ export async function GET() {
       },
       updated: new Date().toISOString()
     })
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    return response
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
