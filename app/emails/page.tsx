@@ -61,7 +61,8 @@ export default function EmailsPage() {
       .from('glassix_messages')
       .select('ticket_id, department, channel, created_at, ticket_status, sender_name, sender_type')
       .ilike('channel', '%mail%')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(10000)
 
     if (!data) { setDataLoading(false); return }
 
@@ -110,7 +111,8 @@ export default function EmailsPage() {
       .from('glassix_messages')
       .select('ticket_id, department, channel, created_at, text, sender_name, sender_type')
       .ilike('channel', '%mail%')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(10000)
 
     if (!data) return
 
