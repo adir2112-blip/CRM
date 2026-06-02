@@ -4,6 +4,17 @@ import { createClient } from '@supabase/supabase-js'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 200, headers: corsHeaders })
+}
+
 const DEPT_MAP: Record<string, string> = {
   '972523481937': 'כללית אקטיב+',
   'active@movement4life.co.il': 'כללית אקטיב+',
@@ -60,7 +71,11 @@ export async function GET() {
       .ilike('channel', '%mail%')
       .order('created_at', { ascending: true })
 
-    if (!data) return NextResponse.json({ departments: [], updated: new Date().toISOString() })
+    if (!data) {
+      const r = NextResponse.json({ departments: [], updated: new Date().toISOString() })
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v))
+      return r
+    }
 
     // Group by ticket
     const ticketMap: Record<string, any> = {}
@@ -120,9 +135,11 @@ export async function GET() {
       },
       updated: new Date().toISOString()
     })
-    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    Object.entries(corsHeaders).forEach(([k, v]) => response.headers.set(k, v))
     return response
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    const response = NextResponse.json({ error: e.message }, { status: 500 })
+    Object.entries(corsHeaders).forEach(([k, v]) => response.headers.set(k, v))
+    return response
   }
 }
