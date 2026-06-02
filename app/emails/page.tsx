@@ -70,17 +70,20 @@ export default function EmailsPage() {
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
+        // First entry is newest (data sorted descending) — use its status
         ticketMap[m.ticket_id] = {
           ticket_id: m.ticket_id,
           department: m.department || 'לא ידוע',
           channel: m.channel || 'WhatsApp',
           first_msg: m.created_at,
+          last_msg: m.created_at,
           status: m.ticket_status || 'Open',
           hasHuman: false
         }
       }
-      // Update status if newer info
-      if (m.ticket_status) ticketMap[m.ticket_id].status = m.ticket_status
+      // Track oldest message
+      if (m.created_at < ticketMap[m.ticket_id].first_msg) ticketMap[m.ticket_id].first_msg = m.created_at
+      // DON'T overwrite status - first (newest) entry has the correct status
       // Mark if has human agent (not bot)
       if (m.sender_type === 'Agent' && m.sender_name && m.sender_name !== 'בוט' && m.sender_name !== 'Bot' && !m.sender_name?.toLowerCase().includes('bot')) {
         ticketMap[m.ticket_id].hasHuman = true
