@@ -77,10 +77,11 @@ export async function GET() {
       .order('created_at', { ascending: false })
       .limit(10000)
 
-    // Get ticket statuses from dedicated table
+    // Get only Open ticket statuses
     const { data: statusData } = await supabase
       .from('glassix_ticket_status')
       .select('ticket_id, status')
+      .eq('status', 'Open')
 
     if (!data) {
       const r = NextResponse.json({ departments: [], updated: new Date().toISOString() })
@@ -89,12 +90,12 @@ export async function GET() {
     }
 
     const statusMap: Record<string, string> = {}
-    ;(statusData || []).forEach((s: any) => { statusMap[s.ticket_id] = s.status })
+    ;(statusData || []).forEach((s: any) => { statusMap[s.ticket_id] = 'Open' })
 
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
-        const status = statusMap[m.ticket_id] || 'Open'
+        const status = statusMap[m.ticket_id] === 'Open' ? 'Open' : 'Closed'
         ticketMap[m.ticket_id] = { ticket_id: m.ticket_id, department: m.department || '', first_msg: m.created_at, last_msg: m.created_at, status }
       }
       if (m.created_at < ticketMap[m.ticket_id].first_msg) ticketMap[m.ticket_id].first_msg = m.created_at

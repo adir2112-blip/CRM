@@ -64,16 +64,17 @@ export default function EmailsPage() {
       .order('created_at', { ascending: false })
       .limit(10000)
 
-    // Get ticket statuses from dedicated table
+    // Get only Open ticket statuses
     const { data: statusData } = await supabase
       .from('glassix_ticket_status')
       .select('ticket_id, status')
+      .eq('status', 'Open')
 
     if (!data) { setDataLoading(false); return }
 
-    // Build status lookup
+    // Build status lookup - default is Closed, only explicitly Open counts
     const statusMap: Record<string, string> = {}
-    ;(statusData || []).forEach((s: any) => { statusMap[s.ticket_id] = s.status })
+    ;(statusData || []).forEach((s: any) => { if (s.status === 'Open') statusMap[s.ticket_id] = 'Open' })
 
     if (!data) { setDataLoading(false); return }
 
@@ -81,8 +82,8 @@ export default function EmailsPage() {
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
-        // Use status from dedicated table, default to Open if not found
-        const status = statusMap[m.ticket_id] || 'Open'
+        // Use status from dedicated table - only explicitly Open counts
+        const status = statusMap[m.ticket_id] === 'Open' ? 'Open' : 'Closed'
         ticketMap[m.ticket_id] = {
           ticket_id: m.ticket_id,
           department: m.department || 'לא ידוע',
