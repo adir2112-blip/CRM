@@ -77,13 +77,6 @@ export async function POST(request: Request) {
           created_at: tx.dateTime || new Date().toISOString(),
           ticket_data: JSON.stringify({ ticketId, participant, clientPhone })
         }, { onConflict: 'message_id' })
-
-        // Mark ticket as Open (only if not already tracked)
-        await supabase.from('glassix_ticket_status').upsert({
-          ticket_id: String(ticketId),
-          status: 'Open',
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'ticket_id', ignoreDuplicates: true })
       }
 
       if (event === 'TICKET_STATE_CHANGE') {
@@ -104,6 +97,15 @@ export async function POST(request: Request) {
       }
 
       if (event === 'NEW_TICKET') {
+        const ticketId = change.ticketId
+        if (ticketId) {
+          // Mark new ticket as Open
+          await supabase.from('glassix_ticket_status').upsert({
+            ticket_id: String(ticketId),
+            status: 'Open',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'ticket_id' })
+        }
         await supabase.from('glassix_cache')
           .delete()
           .eq('cache_key', `glassix_tickets_${process.env.GLASSIX_WORKSPACE || 'm4l-il'}`)
