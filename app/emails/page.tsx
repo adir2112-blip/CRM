@@ -56,41 +56,46 @@ export default function EmailsPage() {
 
   async function loadStats() {
     setDataLoading(true)
-    // Get open tickets from glassix_messages grouped by department
+    // Get mail messages
     const { data } = await supabase
       .from('glassix_messages')
-      .select('ticket_id, department, channel, created_at, ticket_status, sender_name, sender_type')
+      .select('ticket_id, department, channel, created_at, sender_name, sender_type')
       .ilike('channel', '%mail%')
       .order('created_at', { ascending: false })
       .limit(10000)
 
+    // Get ticket statuses from dedicated table
+    const { data: statusData } = await supabase
+      .from('glassix_ticket_status')
+      .select('ticket_id, status')
+
     if (!data) { setDataLoading(false); return }
 
-    // Group by ticket_id — get unique tickets (ignore bot-only tickets)
+    // Build status lookup
+    const statusMap: Record<string, string> = {}
+    ;(statusData || []).forEach((s: any) => { statusMap[s.ticket_id] = s.status })
+
+    if (!data) { setDataLoading(false); return }
+
+    // Group by ticket_id
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
-        // First entry is newest (data sorted descending) — use its status
+        // Use status from dedicated table, default to Open if not found
+        const status = statusMap[m.ticket_id] || 'Open'
         ticketMap[m.ticket_id] = {
           ticket_id: m.ticket_id,
           department: m.department || 'לא ידוע',
-          channel: m.channel || 'WhatsApp',
+          channel: m.channel || 'Mail',
           first_msg: m.created_at,
           last_msg: m.created_at,
-          status: m.ticket_status || 'Open',
-          hasHuman: false
+          status
         }
       }
       // Track oldest message
       if (m.created_at < ticketMap[m.ticket_id].first_msg) ticketMap[m.ticket_id].first_msg = m.created_at
-      // DON'T overwrite status - first (newest) entry has the correct status
-      // Mark if has human agent (not bot)
-      if (m.sender_type === 'Agent' && m.sender_name && m.sender_name !== 'בוט' && m.sender_name !== 'Bot' && !m.sender_name?.toLowerCase().includes('bot')) {
-        ticketMap[m.ticket_id].hasHuman = true
-      }
     })
 
-    // Only show tickets that had human agent involvement OR are from client only
     const allTickets = Object.values(ticketMap)
 
     // Group by department

@@ -83,6 +83,13 @@ export async function POST(request: Request) {
         const ticketId = change.ticketId
         const newState = change.state || change.newState || ''
         if (ticketId && newState) {
+          // Update status in dedicated table (source of truth)
+          await supabase.from('glassix_ticket_status').upsert({
+            ticket_id: String(ticketId),
+            status: newState,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'ticket_id' })
+          // Also update messages for backwards compatibility
           await supabase.from('glassix_messages')
             .update({ ticket_status: newState })
             .eq('ticket_id', String(ticketId))

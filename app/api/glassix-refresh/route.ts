@@ -72,9 +72,15 @@ export async function GET() {
 
     const { data } = await supabase
       .from('glassix_messages')
-      .select('ticket_id, department, channel, created_at, ticket_status, sender_name, sender_type')
+      .select('ticket_id, department, channel, created_at, sender_name, sender_type')
       .ilike('channel', '%mail%')
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(10000)
+
+    // Get ticket statuses from dedicated table
+    const { data: statusData } = await supabase
+      .from('glassix_ticket_status')
+      .select('ticket_id, status')
 
     if (!data) {
       const r = NextResponse.json({ departments: [], updated: new Date().toISOString() })
@@ -82,12 +88,16 @@ export async function GET() {
       return r
     }
 
+    const statusMap: Record<string, string> = {}
+    ;(statusData || []).forEach((s: any) => { statusMap[s.ticket_id] = s.status })
+
     const ticketMap: Record<string, any> = {}
     data.forEach((m: any) => {
       if (!ticketMap[m.ticket_id]) {
-        ticketMap[m.ticket_id] = { ticket_id: m.ticket_id, department: m.department || '', first_msg: m.created_at, last_msg: m.created_at, status: m.ticket_status || 'Open' }
+        const status = statusMap[m.ticket_id] || 'Open'
+        ticketMap[m.ticket_id] = { ticket_id: m.ticket_id, department: m.department || '', first_msg: m.created_at, last_msg: m.created_at, status }
       }
-      if (m.ticket_status) ticketMap[m.ticket_id].status = m.ticket_status
+      if (m.created_at < ticketMap[m.ticket_id].first_msg) ticketMap[m.ticket_id].first_msg = m.created_at
       if (m.created_at > ticketMap[m.ticket_id].last_msg) ticketMap[m.ticket_id].last_msg = m.created_at
     })
 
@@ -117,6 +127,7 @@ export async function GET() {
         tickets: d.tickets
       }
     }).sort((a: any, b: any) => b.open_tickets - a.open_tickets)
+      .filter((d: any) => d.name !== 'לא ידוע')
 
     const response = NextResponse.json({
       departments,
