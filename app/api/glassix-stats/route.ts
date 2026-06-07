@@ -48,7 +48,7 @@ function businessDaysSince(dateStr: string): number {
   return count
 }
 
-async function getToken(): Promise<string | null> {
+async function getToken(): Promise<{ token: string | null, debug?: any }> {
   try {
     const res = await fetch(`${BASE_URL}/api/v1.2/token/get`, {
       method: 'POST',
@@ -60,12 +60,13 @@ async function getToken(): Promise<string | null> {
         workspace: process.env.GLASSIX_WORKSPACE || 'm4l-il'
       })
     })
-    const data = await res.json()
-    if (!data.token) console.error('Glassix token error:', JSON.stringify(data), 'status:', res.status)
-    return data.token || null
+    const text = await res.text()
+    let data: any = {}
+    try { data = JSON.parse(text) } catch {}
+    if (!data.token) return { token: null, debug: { status: res.status, response: text.slice(0, 500) } }
+    return { token: data.token }
   } catch (e: any) {
-    console.error('Glassix token exception:', e.message)
-    return null
+    return { token: null, debug: { exception: e.message } }
   }
 }
 
@@ -78,20 +79,22 @@ export async function GET() {
   }
 
   try {
-    const token = await getToken()
-    if (!token) {
+    const tokenResult = await getToken()
+    if (!tokenResult.token) {
       const r = NextResponse.json({ 
         error: 'Failed to get Glassix token',
         debug: {
           workspace: process.env.GLASSIX_WORKSPACE || 'm4l-il',
           hasApiKey: !!process.env.GLASSIX_API_KEY,
           hasApiSecret: !!process.env.GLASSIX_API_SECRET,
-          hasUsername: !!process.env.GLASSIX_USERNAME
+          hasUsername: !!process.env.GLASSIX_USERNAME,
+          glassixResponse: tokenResult.debug
         }
       }, { status: 500 })
       Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v))
       return r
     }
+    const token = tokenResult.token
 
     const since = new Date(Date.now() - 90 * 864e5).toISOString().split('.')[0]
     const until = new Date().toISOString().split('.')[0]
