@@ -118,9 +118,9 @@ export async function GET() {
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
       if (pages === 0) {
         const text = await res.text()
-        listDebug = { status: res.status, url, responsePreview: text.slice(0, 500) }
         try {
           const data = JSON.parse(text)
+          listDebug = { status: res.status, url, topLevelKeys: Object.keys(data), ticketCount: (data.tickets || data[''] || []).length, hasPaging: !!data.paging, pagingKeys: data.paging ? Object.keys(data.paging) : null }
           const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
           if (batch.length === 0) break
           allTickets = allTickets.concat(batch)
