@@ -106,7 +106,7 @@ export async function GET() {
       return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}:00`
     }
 
-    const since = toGlassixDate(new Date(Date.now() - 90 * 864e5))
+    const since = toGlassixDate(new Date(Date.now() - 28 * 864e5))
     const until = toGlassixDate(new Date())
 
     let allTickets: any[] = []
