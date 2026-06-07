@@ -97,7 +97,13 @@ export async function GET() {
     const token = tokenResult.token
 
     function toGlassixDate(d: Date): string {
-      return d.toISOString().replace('T', ' ').replace('Z', '').split('.')[0]
+      const dd = String(d.getUTCDate()).padStart(2, '0')
+      const mm = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const yyyy = d.getUTCFullYear()
+      const hh = String(d.getUTCHours()).padStart(2, '0')
+      const min = String(d.getUTCMinutes()).padStart(2, '0')
+      const ss = String(d.getUTCSeconds()).padStart(2, '0')
+      return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}:00`
     }
 
     const since = toGlassixDate(new Date(Date.now() - 90 * 864e5))
