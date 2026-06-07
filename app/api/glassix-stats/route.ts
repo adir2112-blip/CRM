@@ -104,19 +104,33 @@ export async function GET() {
     const until = toGlassixDate(new Date())
 
     let allTickets: any[] = []
+    let listDebug: any = {}
     let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
 
     let pages = 0
     while (url && pages < 20) {
       const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
-      if (res.status === 429) break
-      if (!res.ok) break
-      const data = await res.json()
-      const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
-      if (batch.length === 0) break
-      allTickets = allTickets.concat(batch)
-      const next = data.paging?.next || null
-      url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+      if (pages === 0) {
+        const text = await res.text()
+        listDebug = { status: res.status, url, responsePreview: text.slice(0, 500) }
+        try {
+          const data = JSON.parse(text)
+          const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+          if (batch.length === 0) break
+          allTickets = allTickets.concat(batch)
+          const next = data.paging?.next || null
+          url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+        } catch { break }
+      } else {
+        if (res.status === 429) break
+        if (!res.ok) break
+        const data = await res.json()
+        const batch = data[''] || data.tickets || data.data || (Array.isArray(data) ? data : [])
+        if (batch.length === 0) break
+        allTickets = allTickets.concat(batch)
+        const next = data.paging?.next || null
+        url = next && typeof next === 'string' ? (next.startsWith('http') ? next : `${BASE_URL}${next}`) : null
+      }
       pages++
     }
 
@@ -170,7 +184,7 @@ export async function GET() {
         critical: departments.filter((d: any) => d.sla_status === 'red').length
       },
       source: 'glassix-live',
-      debug: { totalFromGlassix: allTickets.length, protocols: debugProtocols, states: debugStates, sampleTicket: allTickets[0] ? { keys: Object.keys(allTickets[0]), protocolType: allTickets[0].primaryProtocolType || allTickets[0].protocolType, state: allTickets[0].state || allTickets[0].status } : null },
+      debug: { totalFromGlassix: allTickets.length, protocols: debugProtocols, states: debugStates, listDebug, sampleTicket: allTickets[0] ? { keys: Object.keys(allTickets[0]), protocolType: allTickets[0].primaryProtocolType || allTickets[0].protocolType, state: allTickets[0].state || allTickets[0].status } : null },
       updated: new Date().toISOString()
     })
     Object.entries(corsHeaders).forEach(([k, v]) => response.headers.set(k, v))
