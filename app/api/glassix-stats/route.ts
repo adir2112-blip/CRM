@@ -63,8 +63,8 @@ async function getToken(): Promise<{ token: string | null, debug?: any }> {
     const text = await res.text()
     let data: any = {}
     try { data = JSON.parse(text) } catch {}
-    if (!data.token) return { token: null, debug: { status: res.status, response: text.slice(0, 500) } }
-    return { token: data.token }
+    if (!data.token && !data.access_token) return { token: null, debug: { status: res.status, response: text.slice(0, 500) } }
+    return { token: data.token || data.access_token }
   } catch (e: any) {
     return { token: null, debug: { exception: e.message } }
   }
