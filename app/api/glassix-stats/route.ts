@@ -100,7 +100,7 @@ export async function GET() {
     const until = new Date().toISOString().split('.')[0]
 
     let allTickets: any[] = []
-    let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=open`
+    let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
 
     let pages = 0
     while (url && pages < 20) {
@@ -127,6 +127,10 @@ export async function GET() {
       debugStates[t.state || t.status || 'unknown'] = (debugStates[t.state || t.status || 'unknown'] || 0) + 1
 
       if (!protocol.toLowerCase().includes('mail')) return
+
+      // Only count open tickets
+      const state = (t.state || t.status || '').toLowerCase()
+      if (state === 'closed' || state === 'solved') return
 
       const participants = t.participants || []
       const deptParticipant = participants.find((p: any) => p.departmentIdentifier)
