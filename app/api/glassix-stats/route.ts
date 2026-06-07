@@ -96,8 +96,12 @@ export async function GET() {
     }
     const token = tokenResult.token
 
-    const since = new Date(Date.now() - 90 * 864e5).toISOString().split('.')[0]
-    const until = new Date().toISOString().split('.')[0]
+    function toGlassixDate(d: Date): string {
+      return d.toISOString().replace('T', ' ').replace('Z', '').split('.')[0]
+    }
+
+    const since = toGlassixDate(new Date(Date.now() - 90 * 864e5))
+    const until = toGlassixDate(new Date())
 
     let allTickets: any[] = []
     let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
