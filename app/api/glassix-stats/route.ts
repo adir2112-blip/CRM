@@ -111,7 +111,7 @@ export async function GET() {
 
     let allTickets: any[] = []
     let listDebug: any = {}
-    let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}`
+    let url: string | null = `${BASE_URL}/api/v1.2/tickets/list?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&statuses=Open`
 
     let pages = 0
     while (url && pages < 20) {
