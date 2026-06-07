@@ -61,8 +61,12 @@ async function getToken(): Promise<string | null> {
       })
     })
     const data = await res.json()
+    if (!data.token) console.error('Glassix token error:', JSON.stringify(data), 'status:', res.status)
     return data.token || null
-  } catch { return null }
+  } catch (e: any) {
+    console.error('Glassix token exception:', e.message)
+    return null
+  }
 }
 
 export async function GET() {
@@ -75,7 +79,19 @@ export async function GET() {
 
   try {
     const token = await getToken()
-    if (!token) throw new Error('Failed to get Glassix token')
+    if (!token) {
+      const r = NextResponse.json({ 
+        error: 'Failed to get Glassix token',
+        debug: {
+          workspace: process.env.GLASSIX_WORKSPACE || 'm4l-il',
+          hasApiKey: !!process.env.GLASSIX_API_KEY,
+          hasApiSecret: !!process.env.GLASSIX_API_SECRET,
+          hasUsername: !!process.env.GLASSIX_USERNAME
+        }
+      }, { status: 500 })
+      Object.entries(corsHeaders).forEach(([k, v]) => r.headers.set(k, v))
+      return r
+    }
 
     const since = new Date(Date.now() - 90 * 864e5).toISOString().split('.')[0]
     const until = new Date().toISOString().split('.')[0]
