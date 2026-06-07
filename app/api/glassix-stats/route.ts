@@ -118,9 +118,14 @@ export async function GET() {
 
     // Filter mail only and group by department
     const deptMap: Record<string, any> = {}
+    const debugProtocols: Record<string, number> = {}
+    const debugStates: Record<string, number> = {}
 
     allTickets.forEach((t: any) => {
-      const protocol = t.primaryProtocolType || ''
+      const protocol = t.primaryProtocolType || t.protocolType || ''
+      debugProtocols[protocol] = (debugProtocols[protocol] || 0) + 1
+      debugStates[t.state || t.status || 'unknown'] = (debugStates[t.state || t.status || 'unknown'] || 0) + 1
+
       if (!protocol.toLowerCase().includes('mail')) return
 
       const participants = t.participants || []
@@ -157,6 +162,7 @@ export async function GET() {
         critical: departments.filter((d: any) => d.sla_status === 'red').length
       },
       source: 'glassix-live',
+      debug: { totalFromGlassix: allTickets.length, protocols: debugProtocols, states: debugStates, sampleTicket: allTickets[0] ? { keys: Object.keys(allTickets[0]), protocolType: allTickets[0].primaryProtocolType || allTickets[0].protocolType, state: allTickets[0].state || allTickets[0].status } : null },
       updated: new Date().toISOString()
     })
     Object.entries(corsHeaders).forEach(([k, v]) => response.headers.set(k, v))
