@@ -72,7 +72,7 @@ export default function DashboardCustomPage() {
     let result: any = null
     try {
       if (src === 'cases_open') {
-        const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).in('status', ['חדש','בטיפול נציג','הועבר לשיחת מנהל','ממתין לשיחת מנהל','בטיפול בשיחת מנהל','בטיפול לאחר שיחת מנהל'])
+        const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל','ממתין לשיחת מנהל','בטיפול בשיחת מנהל','בטיפול לאחר שיחת מנהל'])
         result = { value: count || 0 }
       } else if (src === 'cases_today') {
         const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).gte('created_at', today)
@@ -82,24 +82,24 @@ export default function DashboardCustomPage() {
         const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo)
         result = { value: count || 0 }
       } else if (src === 'cases_by_org') {
-        const { data: cases } = await supabase.from('cases').select('organization').in('status', ['חדש','בטיפול נציג','הועבר לשיחת מנהל'])
+        const { data: cases } = await supabase.from('cases').select('org_name').in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל'])
         const g: Record<string,number> = {}
-        ;(cases||[]).forEach((c:any) => { g[c.organization||'לא ידוע'] = (g[c.organization||'לא ידוע']||0)+1 })
+        ;(cases||[]).forEach((c:any) => { g[c.org_name||'לא ידוע'] = (g[c.org_name||'לא ידוע']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value) }
       } else if (src === 'cases_by_status') {
-        const { data: cases } = await supabase.from('cases').select('status')
+        const { data: cases } = await supabase.from('cases').select('status_name')
         const g: Record<string,number> = {}
-        ;(cases||[]).forEach((c:any) => { g[c.status||'לא ידוע'] = (g[c.status||'לא ידוע']||0)+1 })
+        ;(cases||[]).forEach((c:any) => { g[c.status_name||'לא ידוע'] = (g[c.status_name||'לא ידוע']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value) }
       } else if (src === 'cases_by_agent') {
-        const { data: cases } = await supabase.from('cases').select('assigned_to').in('status', ['חדש','בטיפול נציג','הועבר לשיחת מנהל'])
+        const { data: cases } = await supabase.from('cases').select('agent_name').in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל'])
         const g: Record<string,number> = {}
-        ;(cases||[]).forEach((c:any) => { g[c.assigned_to||'לא משויך'] = (g[c.assigned_to||'לא משויך']||0)+1 })
+        ;(cases||[]).forEach((c:any) => { g[c.agent_name||'לא משויך'] = (g[c.agent_name||'לא משויך']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value) }
       } else if (src === 'cases_by_category') {
-        const { data: cases } = await supabase.from('cases').select('category')
+        const { data: cases } = await supabase.from('cases').select('cat1_name')
         const g: Record<string,number> = {}
-        ;(cases||[]).forEach((c:any) => { g[c.category||'לא ידוע'] = (g[c.category||'לא ידוע']||0)+1 })
+        ;(cases||[]).forEach((c:any) => { g[c.cat1_name||'לא ידוע'] = (g[c.cat1_name||'לא ידוע']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value).slice(0,10) }
       } else if (src === 'cases_daily_trend') {
         const thirtyAgo = new Date(now.getTime() - 30*864e5).toISOString().split('T')[0]
