@@ -81,11 +81,13 @@ export default function CasesPage() {
   const [newLog, setNewLog] = useState('')
   const [editStatus, setEditStatus] = useState('')
   const [toast, setToast] = useState('')
-  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'glassix'>('details')
+  const [caseTab, setCaseTab] = useState<'details'|'history'|'files'|'sms'|'glassix'|'recordings'>('details')
   const [glassixTickets, setGlassixTickets] = useState<any[]>([])
   const [glassixLoading, setGlassixLoading] = useState(false)
   const [glassixTotal, setGlassixTotal] = useState(0)
   const [glassixError, setGlassixError] = useState('')
+  const [recordings, setRecordings] = useState<any[]>([])
+  const [recordingsLoading, setRecordingsLoading] = useState(false)
   const [smsTemplates, setSmsTemplates] = useState<any[]>([])
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [smsText, setSmsText] = useState('')
@@ -138,6 +140,20 @@ export default function CasesPage() {
       else { setGlassixTickets(data.tickets || []); setGlassixTotal(data.total || 0) }
     } catch { setGlassixError('שגיאה בחיבור') }
     setGlassixLoading(false)
+  }
+
+  async function loadRecordings(c: any) {
+    if (!c?.phone) return
+    setRecordingsLoading(true)
+    let phone = c.phone.replace(/[^0-9]/g, '')
+    if (phone.startsWith('0')) phone = phone.slice(1)
+    const { data } = await supabase.from('call_recordings')
+      .select('*')
+      .or(`caller_phone.like.%${phone}%,caller_phone.like.%${c.phone}%`)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    setRecordings(data || [])
+    setRecordingsLoading(false)
   }
 
   async function openCase(c: any) {
@@ -338,6 +354,9 @@ export default function CasesPage() {
               <div className={`tab${caseTab==='glassix'?' active':''}`} onClick={() => { setCaseTab('glassix'); if(!glassixTickets.length && !glassixLoading) loadGlassix(selectedCase) }}>
                 🟦 Glassix {glassixTotal>0 && <span className="badge b-blue" style={{ fontSize:10, marginRight:4 }}>{glassixTotal}</span>}
               </div>
+              <div className={`tab${caseTab==='recordings'?' active':''}`} onClick={() => { setCaseTab('recordings'); if(!recordings.length && !recordingsLoading) loadRecordings(selectedCase) }}>
+                🎙️ הקלטות {recordings.length>0 && <span className="badge b-blue" style={{ fontSize:10, marginRight:4 }}>{recordings.length}</span>}
+              </div>
             </div>
             {caseTab === 'details' && <>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
@@ -513,6 +532,33 @@ export default function CasesPage() {
                 {glassixError && <div style={{ padding:'10px', background:'#fef2f2', borderRadius:8, fontSize:12, color:'#b91c1c' }}>⚠️ {glassixError}</div>}
                 {!glassixLoading && !glassixError && glassixTickets.length===0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>🟦 לא נמצאו שיחות</div>}
                 {glassixTickets.map((t: any) => <GlassixItem key={t.id} ticket={t} />)}
+              </div>
+            )}
+            {caseTab === 'recordings' && (
+              <div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
+                  <div style={{ fontSize:13, fontWeight:600 }}>🎙️ הקלטות שיחות</div>
+                  <button className="btn btn-xs" onClick={() => loadRecordings(selectedCase)}>🔄 רענן</button>
+                </div>
+                {recordingsLoading && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>⏳ טוען...</div>}
+                {!recordingsLoading && recordings.length===0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text3)' }}>🎙️ לא נמצאו הקלטות</div>}
+                {recordings.map((r: any) => (
+                  <div key={r.id} style={{ background:'#f8fafc', borderRadius:10, padding:14, marginBottom:10, border:'1px solid #e2e8f0' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:600, background: r.direction==='נכנסת'?'#dbeafe':'#fef3c7', color: r.direction==='נכנסת'?'#1d4ed8':'#92400e' }}>{r.direction}</span>
+                        <span style={{ padding:'2px 10px', borderRadius:99, fontSize:11, fontWeight:500, background: r.finish_type==='Ok'?'#dcfce7':'#fef2f2', color: r.finish_type==='Ok'?'#166534':'#991b1b' }}>{r.finish_type==='Ok'?'✅ נענתה':'❌ לא נענתה'}</span>
+                        <span style={{ fontSize:12, color:'#64748b' }}>שלוחה {r.extension}</span>
+                      </div>
+                      <span style={{ fontSize:11, color:'#94a3b8' }}>{new Date(r.created_at).toLocaleDateString('he-IL',{timeZone:'Asia/Jerusalem',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}</span>
+                    </div>
+                    {r.title && <div style={{ fontSize:12, color:'#475569', marginBottom:8 }}>{r.title}</div>}
+                    {r.recording_url && <div style={{ marginBottom:8 }}><audio controls preload="none" style={{ width:'100%', height:36 }}><source src={r.recording_url} type="audio/mpeg"/></audio></div>}
+                    {r.summary && <div style={{ background:'#eef2ff', borderRadius:8, padding:10, marginBottom:6 }}><div style={{ fontSize:11, fontWeight:600, color:'#4338ca', marginBottom:4 }}>📝 סיכום AI</div><div style={{ fontSize:12, color:'#334155', lineHeight:1.5 }}>{r.summary}</div></div>}
+                    {r.transcription && <details style={{ fontSize:12, color:'#64748b' }}><summary style={{ cursor:'pointer', fontWeight:500 }}>📄 תמלול מלא</summary><div style={{ padding:'8px 0', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{r.transcription}</div></details>}
+                    {r.sentiment_score && <div style={{ fontSize:11, color:'#94a3b8', marginTop:4 }}>💭 סנטימנט: {r.sentiment_score}/5</div>}
+                  </div>
+                ))}
               </div>
             )}
           </div>
