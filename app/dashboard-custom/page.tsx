@@ -354,7 +354,7 @@ export default function DashboardCustomPage() {
                     <tr key={c.id} style={{borderBottom:'1px solid #f1f5f9',cursor:'pointer',transition:'background .15s'}}
                       onMouseEnter={e=>(e.currentTarget.style.background='#f0f4ff')}
                       onMouseLeave={e=>(e.currentTarget.style.background='')}
-                      onClick={()=>window.open(`/cases/${c.id}`,'_blank')}>
+                      onClick={()=>{ setDrillCases(null); window.location.href = '/cases' }}>
                       <td style={{padding:'8px 12px',fontWeight:600}}>{c.customer_name}</td>
                       <td style={{padding:'8px 12px',direction:'ltr',textAlign:'right'}}>{c.phone}</td>
                       <td style={{padding:'8px 12px'}}>{c.org_name}</td>
