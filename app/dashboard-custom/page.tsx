@@ -10,7 +10,6 @@ const WIDGET_TYPES = [
   { type: 'line', label: '📈 גרף קו', desc: 'מגמה לאורך זמן' },
   { type: 'table', label: '📋 טבלה', desc: 'נתונים עם סינון חופשי' },
 ]
-
 const DATA_SOURCES = [
   { key: 'cases_open', label: 'פניות פתוחות' },
   { key: 'cases_today', label: 'פניות היום' },
@@ -23,15 +22,11 @@ const DATA_SOURCES = [
   { key: 'agents_online', label: 'נציגים מחוברים' },
   { key: 'emails_open', label: 'מיילים פתוחים' },
 ]
-
 const COLORS = ['#6366f1','#f59e0b','#10b981','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316']
 const KPI_COLORS = [
-  { value: '#6366f1', label: 'סגול' },
-  { value: '#10b981', label: 'ירוק' },
-  { value: '#f59e0b', label: 'צהוב' },
-  { value: '#ef4444', label: 'אדום' },
-  { value: '#3b82f6', label: 'כחול' },
-  { value: '#ec4899', label: 'ורוד' },
+  { value: '#6366f1', label: 'סגול' }, { value: '#10b981', label: 'ירוק' },
+  { value: '#f59e0b', label: 'צהוב' }, { value: '#ef4444', label: 'אדום' },
+  { value: '#3b82f6', label: 'כחול' }, { value: '#ec4899', label: 'ורוד' },
 ]
 
 export default function DashboardCustomPage() {
@@ -39,16 +34,31 @@ export default function DashboardCustomPage() {
   const [profile, setProfile] = useState<any>(null)
   const [widgets, setWidgets] = useState<any[]>([])
   const [showAddModal, setShowAddModal] = useState(false)
+  const [settingsWidget, setSettingsWidget] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [widgetData, setWidgetData] = useState<Record<string, any>>({})
+  const [orgs, setOrgs] = useState<string[]>([])
+  const [agents, setAgents] = useState<string[]>([])
+  const [statuses, setStatuses] = useState<string[]>([])
+  // Add form
   const [newType, setNewType] = useState('')
   const [newTitle, setNewTitle] = useState('')
   const [newSource, setNewSource] = useState('')
   const [newColor, setNewColor] = useState('#6366f1')
   const [newWidth, setNewWidth] = useState('half')
+  // Settings form
+  const [sOrg, setSOrg] = useState('')
+  const [sAgent, setSAgent] = useState('')
+  const [sStatus, setSStatus] = useState('')
+  const [sDateFrom, setSDateFrom] = useState('')
+  const [sDateTo, setSDateTo] = useState('')
+  const [sColor, setSColor] = useState('#6366f1')
+  const [sTitle, setSTitle] = useState('')
+  const [sSource, setSSource] = useState('')
+  const [sWidth, setSWidth] = useState('half')
 
   useEffect(() => { loadProfile() }, [])
-  useEffect(() => { if (profile) loadWidgets() }, [profile])
+  useEffect(() => { if (profile) { loadWidgets(); loadFilterOptions() } }, [profile])
 
   async function loadProfile() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -58,6 +68,18 @@ export default function DashboardCustomPage() {
     setProfile(data)
   }
 
+  async function loadFilterOptions() {
+    const { data: o } = await supabase.from('cases').select('org_name').limit(1000)
+    const { data: a } = await supabase.from('cases').select('agent_name').limit(1000)
+    const { data: s } = await supabase.from('cases').select('status_name').limit(1000)
+    const orgSet = new Set<string>(); (o||[]).forEach((r:any) => { if(r.org_name) orgSet.add(r.org_name) })
+    const agentSet = new Set<string>(); (a||[]).forEach((r:any) => { if(r.agent_name) agentSet.add(r.agent_name) })
+    const statusSet = new Set<string>(); (s||[]).forEach((r:any) => { if(r.status_name) statusSet.add(r.status_name) })
+    setOrgs(Array.from(orgSet).sort())
+    setAgents(Array.from(agentSet).sort())
+    setStatuses(Array.from(statusSet).sort())
+  }
+
   async function loadWidgets() {
     const { data } = await supabase.from('dashboard_widgets').select('*').eq('user_id', profile.id).order('position')
     setWidgets(data || [])
@@ -65,45 +87,71 @@ export default function DashboardCustomPage() {
     for (const w of (data || [])) await loadWidgetData(w)
   }
 
+  function applyFilters(query: any, config: any) {
+    if (config?.filter_org) query = query.eq('org_name', config.filter_org)
+    if (config?.filter_agent) query = query.eq('agent_name', config.filter_agent)
+    if (config?.filter_status) query = query.eq('status_name', config.filter_status)
+    if (config?.filter_date_from) query = query.gte('created_at', config.filter_date_from)
+    if (config?.filter_date_to) query = query.lte('created_at', config.filter_date_to + 'T23:59:59')
+    return query
+  }
+
   async function loadWidgetData(widget: any) {
     const src = widget.config?.data_source || ''
+    const cfg = widget.config || {}
     const now = new Date()
     const today = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
     let result: any = null
     try {
       if (src === 'cases_open') {
-        const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל','ממתין לשיחת מנהל','בטיפול בשיחת מנהל','בטיפול לאחר שיחת מנהל'])
+        let q = supabase.from('cases').select('*', { count: 'exact', head: true }).in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל','ממתין לשיחת מנהל','בטיפול בשיחת מנהל','בטיפול לאחר שיחת מנהל'])
+        q = applyFilters(q, cfg)
+        const { count } = await q
         result = { value: count || 0 }
       } else if (src === 'cases_today') {
-        const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).gte('created_at', today)
+        let q = supabase.from('cases').select('*', { count: 'exact', head: true }).gte('created_at', today)
+        q = applyFilters(q, cfg)
+        const { count } = await q
         result = { value: count || 0 }
       } else if (src === 'cases_week') {
         const weekAgo = new Date(now.getTime() - 7*864e5).toISOString().split('T')[0]
-        const { count } = await supabase.from('cases').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo)
+        let q = supabase.from('cases').select('*', { count: 'exact', head: true }).gte('created_at', weekAgo)
+        q = applyFilters(q, cfg)
+        const { count } = await q
         result = { value: count || 0 }
       } else if (src === 'cases_by_org') {
-        const { data: cases } = await supabase.from('cases').select('org_name').in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל'])
+        let q = supabase.from('cases').select('org_name')
+        q = applyFilters(q, cfg)
+        const { data: cases } = await q
         const g: Record<string,number> = {}
         ;(cases||[]).forEach((c:any) => { g[c.org_name||'לא ידוע'] = (g[c.org_name||'לא ידוע']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value) }
       } else if (src === 'cases_by_status') {
-        const { data: cases } = await supabase.from('cases').select('status_name')
+        let q = supabase.from('cases').select('status_name')
+        q = applyFilters(q, cfg)
+        const { data: cases } = await q
         const g: Record<string,number> = {}
         ;(cases||[]).forEach((c:any) => { g[c.status_name||'לא ידוע'] = (g[c.status_name||'לא ידוע']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value) }
       } else if (src === 'cases_by_agent') {
-        const { data: cases } = await supabase.from('cases').select('agent_name').in('status_name', ['חדש','בטיפול נציג','הועבר לשיחת מנהל'])
+        let q = supabase.from('cases').select('agent_name')
+        q = applyFilters(q, cfg)
+        const { data: cases } = await q
         const g: Record<string,number> = {}
         ;(cases||[]).forEach((c:any) => { g[c.agent_name||'לא משויך'] = (g[c.agent_name||'לא משויך']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value) }
       } else if (src === 'cases_by_category') {
-        const { data: cases } = await supabase.from('cases').select('cat1_name')
+        let q = supabase.from('cases').select('cat1_name')
+        q = applyFilters(q, cfg)
+        const { data: cases } = await q
         const g: Record<string,number> = {}
         ;(cases||[]).forEach((c:any) => { g[c.cat1_name||'לא ידוע'] = (g[c.cat1_name||'לא ידוע']||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})).sort((a:any,b:any) => b.value-a.value).slice(0,10) }
       } else if (src === 'cases_daily_trend') {
         const thirtyAgo = new Date(now.getTime() - 30*864e5).toISOString().split('T')[0]
-        const { data: cases } = await supabase.from('cases').select('created_at').gte('created_at', thirtyAgo)
+        let q = supabase.from('cases').select('created_at').gte('created_at', thirtyAgo)
+        q = applyFilters(q, cfg)
+        const { data: cases } = await q
         const g: Record<string,number> = {}
         ;(cases||[]).forEach((c:any) => { const d = new Date(c.created_at).toLocaleDateString('he-IL',{timeZone:'Asia/Jerusalem',day:'2-digit',month:'2-digit'}); g[d]=(g[d]||0)+1 })
         result = { items: Object.entries(g).map(([name,value]) => ({name,value})) }
@@ -146,7 +194,47 @@ export default function DashboardCustomPage() {
     setWidgets(u)
   }
 
+  function openSettings(w: any) {
+    setSettingsWidget(w)
+    setSTitle(w.title)
+    setSSource(w.config?.data_source || '')
+    setSColor(w.config?.color || '#6366f1')
+    setSWidth(w.width || 'half')
+    setSOrg(w.config?.filter_org || '')
+    setSAgent(w.config?.filter_agent || '')
+    setSStatus(w.config?.filter_status || '')
+    setSDateFrom(w.config?.filter_date_from || '')
+    setSDateTo(w.config?.filter_date_to || '')
+  }
+
+  async function saveSettings() {
+    if (!settingsWidget) return
+    const newConfig = {
+      ...settingsWidget.config,
+      data_source: sSource, color: sColor,
+      filter_org: sOrg || undefined, filter_agent: sAgent || undefined,
+      filter_status: sStatus || undefined, filter_date_from: sDateFrom || undefined, filter_date_to: sDateTo || undefined
+    }
+    // Clean undefined
+    Object.keys(newConfig).forEach(k => { if (newConfig[k] === undefined || newConfig[k] === '') delete newConfig[k] })
+    await supabase.from('dashboard_widgets').update({ title: sTitle, config: newConfig, width: sWidth }).eq('id', settingsWidget.id)
+    const updated = widgets.map(w => w.id === settingsWidget.id ? { ...w, title: sTitle, config: newConfig, width: sWidth } : w)
+    setWidgets(updated)
+    const updatedWidget = updated.find(w => w.id === settingsWidget.id)
+    if (updatedWidget) await loadWidgetData(updatedWidget)
+    setSettingsWidget(null)
+  }
+
   function resetForm() { setNewType(''); setNewTitle(''); setNewSource(''); setNewColor('#6366f1'); setNewWidth('half') }
+
+  function activeFilters(w: any): string[] {
+    const f: string[] = []
+    if (w.config?.filter_org) f.push(w.config.filter_org)
+    if (w.config?.filter_agent) f.push(w.config.filter_agent)
+    if (w.config?.filter_status) f.push(w.config.filter_status)
+    if (w.config?.filter_date_from || w.config?.filter_date_to) f.push('📅')
+    return f
+  }
 
   function renderWidget(w: any) {
     const d = widgetData[w.id]; const color = w.config?.color || '#6366f1'
@@ -159,6 +247,9 @@ export default function DashboardCustomPage() {
     return null
   }
 
+  const inputStyle = {width:'100%',padding:'10px 14px',borderRadius:8,border:'1px solid #cbd5e1',fontSize:14,marginBottom:14,boxSizing:'border-box' as const,color:'#1e293b'}
+  const labelStyle = {fontSize:13,fontWeight:600 as const,color:'#475569',display:'block' as const,marginBottom:6}
+
   if (loading) return <div style={{textAlign:'center',padding:80,color:'#94a3b8'}}>טוען...</div>
   return (
     <div dir="rtl" style={{fontFamily:"'Rubik',sans-serif",padding:'20px 24px',maxWidth:1400,margin:'0 auto'}}>
@@ -170,6 +261,7 @@ export default function DashboardCustomPage() {
           <button onClick={()=>setShowAddModal(true)} style={{padding:'8px 20px',borderRadius:8,border:'none',background:'#6366f1',color:'#fff',cursor:'pointer',fontSize:13,fontWeight:600,boxShadow:'0 2px 8px rgba(99,102,241,.3)'}}>✨ הוסף ווידג'ט</button>
         </div>
       </div>
+
       {widgets.length===0?(
         <div style={{textAlign:'center',padding:'80px 20px',background:'#f8fafc',borderRadius:16,border:'2px dashed #cbd5e1'}}>
           <div style={{fontSize:48,marginBottom:16}}>📊</div><h2 style={{fontSize:18,fontWeight:600,color:'#64748b',margin:0}}>הדשבורד ריק</h2>
@@ -178,26 +270,34 @@ export default function DashboardCustomPage() {
         </div>
       ):(
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(340px, 1fr))',gap:16}}>
-          {widgets.map((w,idx)=>(
+          {widgets.map((w,idx)=>{
+            const filters = activeFilters(w)
+            return (
             <div key={w.id} style={{gridColumn:w.width==='full'?'1 / -1':undefined,background:'#fff',borderRadius:14,border:'1px solid #e2e8f0',boxShadow:'0 1px 4px rgba(0,0,0,.05)',overflow:'hidden'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid #f1f5f9'}}>
-                <span style={{fontSize:14,fontWeight:600,color:'#334155'}}>{w.title}</span>
-                <div style={{display:'flex',gap:4}}>
-                  {idx>0&&<button onClick={()=>moveWidget(w.id,-1)} style={{padding:'2px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#94a3b8'}}>◀</button>}
-                  {idx<widgets.length-1&&<button onClick={()=>moveWidget(w.id,1)} style={{padding:'2px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#94a3b8'}}>▶</button>}
-                  <button onClick={()=>deleteWidget(w.id)} style={{padding:'2px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#ef4444'}} title="מחק">✕</button>
+                <div>
+                  <span style={{fontSize:14,fontWeight:600,color:'#334155'}}>{w.title}</span>
+                  {filters.length > 0 && <div style={{display:'flex',gap:4,marginTop:4,flexWrap:'wrap'}}>{filters.map((f,i)=><span key={i} style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'#eef2ff',color:'#6366f1',fontWeight:500}}>{f}</span>)}</div>}
+                </div>
+                <div style={{display:'flex',gap:2}}>
+                  <button onClick={()=>openSettings(w)} style={{padding:'4px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#64748b'}} title="הגדרות">⚙</button>
+                  {idx>0&&<button onClick={()=>moveWidget(w.id,-1)} style={{padding:'4px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#94a3b8'}}>◀</button>}
+                  {idx<widgets.length-1&&<button onClick={()=>moveWidget(w.id,1)} style={{padding:'4px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#94a3b8'}}>▶</button>}
+                  <button onClick={()=>deleteWidget(w.id)} style={{padding:'4px 6px',border:'none',background:'none',cursor:'pointer',fontSize:14,color:'#ef4444'}} title="מחק">✕</button>
                 </div>
               </div>
               <div style={{padding:w.widget_type==='kpi'?'0':'12px 8px'}}>{renderWidget(w)}</div>
             </div>
-          ))}
+          )})}
         </div>
       )}
+
+      {/* Add Widget Modal */}
       {showAddModal&&(
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>{setShowAddModal(false);resetForm()}}>
           <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:16,padding:28,width:'95%',maxWidth:480,maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,.2)'}}>
             <h2 style={{fontSize:18,fontWeight:700,margin:'0 0 20px',color:'#1e293b'}}>✨ הוסף ווידג'ט חדש</h2>
-            <label style={{fontSize:13,fontWeight:600,color:'#475569',display:'block',marginBottom:8}}>סוג ווידג'ט</label>
+            <label style={labelStyle}>סוג ווידג'ט</label>
             <div style={{display:'grid',gap:8,marginBottom:20}}>
               {WIDGET_TYPES.map(wt=>(
                 <button key={wt.type} onClick={()=>setNewType(wt.type)} style={{padding:'12px 16px',borderRadius:10,textAlign:'right',cursor:'pointer',fontSize:13,border:newType===wt.type?'2px solid #6366f1':'1px solid #e2e8f0',background:newType===wt.type?'#eef2ff':'#fff',fontWeight:newType===wt.type?600:400}}>
@@ -206,18 +306,18 @@ export default function DashboardCustomPage() {
               ))}
             </div>
             {newType&&<>
-              <label style={{fontSize:13,fontWeight:600,color:'#475569',display:'block',marginBottom:6}}>כותרת</label>
-              <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="למשל: פניות פתוחות" style={{width:'100%',padding:'10px 14px',borderRadius:8,border:'1px solid #cbd5e1',fontSize:14,marginBottom:16,boxSizing:'border-box'}}/>
-              <label style={{fontSize:13,fontWeight:600,color:'#475569',display:'block',marginBottom:6}}>מקור נתונים</label>
-              <select value={newSource} onChange={e=>setNewSource(e.target.value)} style={{width:'100%',padding:'10px 14px',borderRadius:8,border:'1px solid #cbd5e1',fontSize:14,marginBottom:16,boxSizing:'border-box',color:'#1e293b'}}>
+              <label style={labelStyle}>כותרת</label>
+              <input value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="למשל: פניות פתוחות" style={inputStyle}/>
+              <label style={labelStyle}>מקור נתונים</label>
+              <select value={newSource} onChange={e=>setNewSource(e.target.value)} style={inputStyle}>
                 <option value="">בחר מקור...</option>
                 {DATA_SOURCES.map(ds=><option key={ds.key} value={ds.key}>{ds.label}</option>)}
               </select>
-              <label style={{fontSize:13,fontWeight:600,color:'#475569',display:'block',marginBottom:6}}>צבע</label>
+              <label style={labelStyle}>צבע</label>
               <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-                {KPI_COLORS.map(c=><button key={c.value} onClick={()=>setNewColor(c.value)} style={{width:36,height:36,borderRadius:10,background:c.value,border:newColor===c.value?'3px solid #1e293b':'2px solid #e2e8f0',cursor:'pointer',transition:'transform .15s',transform:newColor===c.value?'scale(1.15)':undefined}} title={c.label}/>)}
+                {KPI_COLORS.map(c=><button key={c.value} onClick={()=>setNewColor(c.value)} style={{width:36,height:36,borderRadius:10,background:c.value,border:newColor===c.value?'3px solid #1e293b':'2px solid #e2e8f0',cursor:'pointer',transform:newColor===c.value?'scale(1.15)':undefined}} title={c.label}/>)}
               </div>
-              <label style={{fontSize:13,fontWeight:600,color:'#475569',display:'block',marginBottom:6}}>רוחב</label>
+              <label style={labelStyle}>רוחב</label>
               <div style={{display:'flex',gap:8,marginBottom:24}}>
                 <button onClick={()=>setNewWidth('half')} style={{flex:1,padding:'10px',borderRadius:8,cursor:'pointer',fontSize:13,fontWeight:500,border:newWidth==='half'?'2px solid #6366f1':'1px solid #e2e8f0',background:newWidth==='half'?'#eef2ff':'#fff'}}>חצי רוחב</button>
                 <button onClick={()=>setNewWidth('full')} style={{flex:1,padding:'10px',borderRadius:8,cursor:'pointer',fontSize:13,fontWeight:500,border:newWidth==='full'?'2px solid #6366f1':'1px solid #e2e8f0',background:newWidth==='full'?'#eef2ff':'#fff'}}>רוחב מלא</button>
@@ -227,6 +327,67 @@ export default function DashboardCustomPage() {
                 <button onClick={()=>{setShowAddModal(false);resetForm()}} style={{padding:'12px 20px',borderRadius:10,border:'1px solid #e2e8f0',background:'#fff',fontSize:14,cursor:'pointer',color:'#64748b'}}>ביטול</button>
               </div>
             </>}
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {settingsWidget&&(
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={()=>setSettingsWidget(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:'#fff',borderRadius:16,padding:28,width:'95%',maxWidth:480,maxHeight:'85vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,.2)'}}>
+            <h2 style={{fontSize:18,fontWeight:700,margin:'0 0 20px',color:'#1e293b'}}>⚙ הגדרות ווידג'ט</h2>
+
+            <label style={labelStyle}>כותרת</label>
+            <input value={sTitle} onChange={e=>setSTitle(e.target.value)} style={inputStyle}/>
+
+            <label style={labelStyle}>מקור נתונים</label>
+            <select value={sSource} onChange={e=>setSSource(e.target.value)} style={inputStyle}>
+              <option value="">בחר מקור...</option>
+              {DATA_SOURCES.map(ds=><option key={ds.key} value={ds.key}>{ds.label}</option>)}
+            </select>
+
+            <label style={labelStyle}>צבע</label>
+            <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
+              {KPI_COLORS.map(c=><button key={c.value} onClick={()=>setSColor(c.value)} style={{width:36,height:36,borderRadius:10,background:c.value,border:sColor===c.value?'3px solid #1e293b':'2px solid #e2e8f0',cursor:'pointer',transform:sColor===c.value?'scale(1.15)':undefined}} title={c.label}/>)}
+            </div>
+
+            <label style={labelStyle}>רוחב</label>
+            <div style={{display:'flex',gap:8,marginBottom:16}}>
+              <button onClick={()=>setSWidth('half')} style={{flex:1,padding:'10px',borderRadius:8,cursor:'pointer',fontSize:13,border:sWidth==='half'?'2px solid #6366f1':'1px solid #e2e8f0',background:sWidth==='half'?'#eef2ff':'#fff'}}>חצי רוחב</button>
+              <button onClick={()=>setSWidth('full')} style={{flex:1,padding:'10px',borderRadius:8,cursor:'pointer',fontSize:13,border:sWidth==='full'?'2px solid #6366f1':'1px solid #e2e8f0',background:sWidth==='full'?'#eef2ff':'#fff'}}>רוחב מלא</button>
+            </div>
+
+            <div style={{background:'#f8fafc',borderRadius:12,padding:16,marginBottom:16}}>
+              <div style={{fontSize:14,fontWeight:600,color:'#334155',marginBottom:12}}>🔍 סינון נתונים</div>
+
+              <label style={labelStyle}>ארגון</label>
+              <select value={sOrg} onChange={e=>setSOrg(e.target.value)} style={inputStyle}>
+                <option value="">הכל</option>
+                {orgs.map(o=><option key={o} value={o}>{o}</option>)}
+              </select>
+
+              <label style={labelStyle}>נציג</label>
+              <select value={sAgent} onChange={e=>setSAgent(e.target.value)} style={inputStyle}>
+                <option value="">הכל</option>
+                {agents.map(a=><option key={a} value={a}>{a}</option>)}
+              </select>
+
+              <label style={labelStyle}>סטטוס</label>
+              <select value={sStatus} onChange={e=>setSStatus(e.target.value)} style={inputStyle}>
+                <option value="">הכל</option>
+                {statuses.map(s=><option key={s} value={s}>{s}</option>)}
+              </select>
+
+              <div style={{display:'flex',gap:10}}>
+                <div style={{flex:1}}><label style={labelStyle}>מתאריך</label><input type="date" value={sDateFrom} onChange={e=>setSDateFrom(e.target.value)} style={inputStyle}/></div>
+                <div style={{flex:1}}><label style={labelStyle}>עד תאריך</label><input type="date" value={sDateTo} onChange={e=>setSDateTo(e.target.value)} style={inputStyle}/></div>
+              </div>
+            </div>
+
+            <div style={{display:'flex',gap:10}}>
+              <button onClick={saveSettings} style={{flex:1,padding:'12px',borderRadius:10,border:'none',fontSize:14,fontWeight:600,cursor:'pointer',background:'#6366f1',color:'#fff'}}>💾 שמור</button>
+              <button onClick={()=>setSettingsWidget(null)} style={{padding:'12px 20px',borderRadius:10,border:'1px solid #e2e8f0',background:'#fff',fontSize:14,cursor:'pointer',color:'#64748b'}}>ביטול</button>
+            </div>
           </div>
         </div>
       )}
